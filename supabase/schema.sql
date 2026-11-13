@@ -85,9 +85,16 @@ create table if not exists public.place_photos (
   created_at timestamptz not null default now()
 );
 
+-- Index cho khoá ngoại (Supabase advisor: unindexed_foreign_keys)
+create index if not exists dishes_place_id_idx on public.dishes (place_id);
+create index if not exists place_photos_place_id_idx on public.place_photos (place_id);
+create index if not exists place_categories_category_id_idx on public.place_categories (category_id);
+
 -- Tự cập nhật updated_at
 create or replace function public.touch_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql
+set search_path = ''
+as $$
 begin
   new.updated_at = now();
   return new;
@@ -109,7 +116,7 @@ alter table public.place_photos     enable row level security;
 -- admins: user chỉ xem được dòng của chính mình (để app biết mình có phải admin)
 drop policy if exists "admins self read" on public.admins;
 create policy "admins self read" on public.admins
-  for select to authenticated using (user_id = auth.uid());
+  for select to authenticated using (user_id = (select auth.uid()));
 
 -- categories: ai cũng đọc, admin ghi
 drop policy if exists "categories read" on public.categories;

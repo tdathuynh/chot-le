@@ -16,6 +16,7 @@ HUONG_DAN_SUPABASE.md        Hướng dẫn tạo project Supabase và tài kho�
 app/                         Expo app (SDK 58, Expo Router, TypeScript strict)
   app/AGENTS.md              Quy tắc riêng của Expo: đọc trước khi đụng API Expo
   src/app/(tabs)/index.tsx   Trang chủ: tìm kiếm, lọc danh mục/giá/quận/đang mở, "Chọn ngẫu nhiên"
+  src/app/(tabs)/chat.tsx     Tab "Hỏi": chat tìm quán, chạy trên máy (src/lib/assistant.ts); sau này có thể thay bằng AI, giữ AssistantReply
   src/app/(tabs)/favorites.tsx  Quán yêu thích (lưu trên máy)
   src/app/(tabs)/admin.tsx   Đăng nhập admin + danh sách quản lý quán
   src/app/place/[id].tsx     Chi tiết quán (ảnh, giá, giờ, thực đơn, chỉ đường, gọi)

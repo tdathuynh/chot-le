@@ -24,6 +24,9 @@ export default function AppTabs() {
           <TabTrigger name="index" href="/" asChild>
             <TabButton>Khám phá</TabButton>
           </TabTrigger>
+          <TabTrigger name="chat" href="/chat" asChild>
+            <TabButton>Hỏi</TabButton>
+          </TabTrigger>
           <TabTrigger name="favorites" href="/favorites" asChild>
             <TabButton>Yêu thích</TabButton>
           </TabTrigger>
@@ -52,6 +55,7 @@ export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps
       ]}>
       <ThemedText
         type="smallBold"
+        numberOfLines={1}
         style={{
           color: isFocused ? t.tintText : t.textSecondary,
         }}>
@@ -126,9 +130,10 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   tabButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     borderRadius: Radii.full,
     minHeight: 44,
     alignItems: 'center',

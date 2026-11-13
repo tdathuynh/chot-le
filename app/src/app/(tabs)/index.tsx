@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
 import { FeaturedPlaceCard, PlaceCard } from '@/components/place-card';
@@ -50,8 +50,14 @@ const EXAMPLE_QUERIES = [
   'bún phở rẻ trong 2 km',
 ];
 
+// iOS: nội dung tràn xuống dưới thanh tab kính mờ (NativeTabs), nên phần tử nổi
+// phải đặt cao hơn thanh tab, nếu không sẽ bị che mờ.
+const IOS_TAB_BAR_HEIGHT = 56;
+
 export default function HomeScreen() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const tabBarOffset = Platform.OS === 'ios' ? insets.bottom + IOS_TAB_BAR_HEIGHT : 0;
   const [places, setPlaces] = useState<PlaceWithRelations[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -563,7 +569,7 @@ export default function HomeScreen() {
             <View style={[styles.flex, styles.mapWrap, { borderColor: t.cardBorder }]}>
               <PlacesMap pins={pins} me={me} dark={dark} onSelect={setSelectedId} />
               {selectedPlace ? (
-                <View style={styles.mapCard}>
+                <View style={[styles.mapCard, { bottom: Spacing.three + tabBarOffset }]}>
                   <PlaceCard place={selectedPlace} distanceKm={selectedPlace.distanceKm} />
                 </View>
               ) : null}
@@ -618,7 +624,7 @@ export default function HomeScreen() {
           }}
           style={({ pressed }) => [
             styles.viewToggle,
-            { backgroundColor: t.text, bottom: selectedPlace ? 168 : Spacing.four, opacity: pressed ? 0.85 : 1 },
+            { backgroundColor: t.text, bottom: (selectedPlace ? 168 : Spacing.four) + tabBarOffset, opacity: pressed ? 0.85 : 1 },
             Shadows.strong,
           ]}>
           <Icon name={viewMode === 'list' ? 'map-outline' : 'list-outline'} size={18} color={t.background} />

@@ -1,0 +1,23 @@
+# Bí mật: KHÔNG bao giờ đưa lên git (app/.env đã có trong app/.gitignore, ghi lại cho chắc)
+.env
+.env.*
+!.env.example
+supabase/.temp/
+supabase/.env
+
+# Thư mục tạm của trình duyệt dùng để chụp ảnh kiểm tra
+edge-profile/
+
+# Ảnh chụp màn hình: thay đổi mỗi vòng, rất nặng → không lưu vào git.
+# Giữ lại các file .md (bản chấm điểm, tổng hợp tham khảo).
+screenshots/**/*.png
+screenshots/**/*.jpg
+screenshots/**/*.jpeg
+screenshots/tham-khao/_html/
+screenshots/tham-khao/_sheets/
+screenshots/_scripts/
+screenshots/edge-profile/
+*.log
+
+# Cài đặt cá nhân của Claude Code
+.claude/settings.local.json

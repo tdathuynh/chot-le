@@ -63,7 +63,7 @@ export function PlaceCard({
           />
         ) : (
           <View style={[styles.image, styles.placeholder, { backgroundColor: t.backgroundElement }]}>
-            <ThemedText style={{ fontSize: 36 }}>🍜</ThemedText>
+            <Icon name="utensils-crossed" size={36} themeColor="textMuted" strokeWidth={1.5} />
           </View>
         )}
       </View>
@@ -90,13 +90,13 @@ export function PlaceCard({
           <View style={styles.adminBadgeRow}>
             {place.is_published ? (
               <View style={styles.visibleRow}>
-                <Icon name="eye-outline" size={14} themeColor="textSecondary" />
+                <Icon name="eye" size={14} themeColor="textSecondary" />
                 <ThemedText type="caption" themeColor="textSecondary">
                   Đang hiển thị
                 </ThemedText>
               </View>
             ) : (
-              <Badge variant="danger" label="Đang ẩn" icon={<Icon name="eye-off-outline" size={12} themeColor="danger" />} />
+              <Badge variant="danger" label="Đang ẩn" icon={<Icon name="eye-off" size={12} themeColor="danger" />} />
             )}
           </View>
         ) : null}
@@ -185,7 +185,7 @@ export function FeaturedPlaceCard({ place, distanceKm }: { place: Place; distanc
           />
         ) : (
           <View style={[styles.featuredImage, styles.placeholder, { backgroundColor: t.backgroundElement }]}>
-            <ThemedText style={{ fontSize: 44 }}>🍲</ThemedText>
+            <Icon name="utensils-crossed" size={44} themeColor="textMuted" strokeWidth={1.5} />
           </View>
         )}
         <View style={styles.featuredOverlayTop}>

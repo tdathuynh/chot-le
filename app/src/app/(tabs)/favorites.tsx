@@ -68,7 +68,7 @@ export default function FavoritesScreen() {
                   Shadows.soft,
                 ]}>
                 <View style={[styles.emptyIconCircle, { backgroundColor: t.tintSubtle }]}>
-                  <Icon name="heart-outline" size={34} themeColor="tint" />
+                  <Icon name="heart" size={34} themeColor="tint" />
                 </View>
                 <ThemedText type="subtitle" style={styles.emptyTitle}>
                   Chưa có quán yêu thích nào

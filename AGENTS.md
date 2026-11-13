@@ -30,7 +30,7 @@ app/                         Expo app (SDK 58, Expo Router, TypeScript strict)
   src/lib/location.ts        Vị trí người dùng (expo-location), khoảng cách, toạ độ từ link Google Maps, directionsUrl
   src/lib/maps-link.ts       Dán link Google Maps → tự điền tên, địa chỉ, quận (đoán theo toạ độ nếu thiếu), toạ độ; địa chỉ dự phòng từ OpenStreetMap
   src/components/random-picker.tsx  Bảng "Hôm nay ăn gì?" (gợi ý ngẫu nhiên theo bộ lọc)
-  src/components/icon.tsx    Icon đơn sắc (Ionicons) — dùng thay emoji cho nút/nhãn
+  src/components/icon.tsx    Icon đơn sắc Lucide (lucide-react-native) — KHÔNG dùng emoji; thêm icon mới vào bảng ICONS; categoryIcon() theo cột categories.icon
   src/components/places-map(.web).tsx  Bản đồ quán: Leaflet + OpenStreetMap trong WebView (điện thoại) / iframe (web); HTML ở src/lib/map-html.ts
   src/lib/local-storage(.web).ts  localStorage: expo-sqlite trên native, window.localStorage trên web
   src/lib/confirm.ts         confirmAsync/notify: chạy được cả web (Alert của RN không chạy trên web)

@@ -5,14 +5,14 @@ import type { Category, PlaceWithRelations } from './types';
 const img = (id: string) => `https://images.unsplash.com/${id}?w=1000&q=70&auto=format&fit=crop`;
 
 export const demoCategories: Category[] = [
-  { id: 1, name: 'Bún / Phở', emoji: '🍜', sort_order: 1 },
-  { id: 2, name: 'Cơm', emoji: '🍚', sort_order: 2 },
-  { id: 3, name: 'Bánh mì', emoji: '🥖', sort_order: 3 },
-  { id: 4, name: 'Ốc / Hải sản', emoji: '🦪', sort_order: 4 },
-  { id: 5, name: 'Lẩu / Nướng', emoji: '🍲', sort_order: 5 },
-  { id: 6, name: 'Ăn vặt', emoji: '🍢', sort_order: 6 },
-  { id: 7, name: 'Cà phê / Trà', emoji: '☕', sort_order: 7 },
-  { id: 8, name: 'Chè / Tráng miệng', emoji: '🍧', sort_order: 8 },
+  { id: 1, name: 'Bún / Phở', emoji: null, icon: 'soup', sort_order: 1 },
+  { id: 2, name: 'Cơm', emoji: null, icon: 'egg-fried', sort_order: 2 },
+  { id: 3, name: 'Bánh mì', emoji: null, icon: 'sandwich', sort_order: 3 },
+  { id: 4, name: 'Ốc / Hải sản', emoji: null, icon: 'shell', sort_order: 4 },
+  { id: 5, name: 'Lẩu / Nướng', emoji: null, icon: 'flame', sort_order: 5 },
+  { id: 6, name: 'Ăn vặt', emoji: null, icon: 'cookie', sort_order: 6 },
+  { id: 7, name: 'Cà phê / Trà', emoji: null, icon: 'coffee', sort_order: 7 },
+  { id: 8, name: 'Chè / Tráng miệng', emoji: null, icon: 'ice-cream-bowl', sort_order: 8 },
 ];
 
 const now = '2026-11-13T00:00:00Z';

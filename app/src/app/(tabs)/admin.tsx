@@ -45,7 +45,7 @@ function LoginForm() {
         ]}>
         <View style={styles.loginHeader}>
           <View style={[styles.loginIconCircle, { backgroundColor: t.tintSubtle }]}>
-            <Icon name="lock-closed-outline" size={30} themeColor="tint" />
+            <Icon name="lock" size={30} themeColor="tint" />
           </View>
           <ThemedText type="title" style={{ textAlign: 'center' }}>
             Đăng nhập quản trị
@@ -159,7 +159,7 @@ export default function AdminScreen() {
             },
             Shadows.soft,
           ]}>
-          <ThemedText style={{ fontSize: 44 }}>🚫</ThemedText>
+          <Icon name="ban" size={44} themeColor="textSecondary" strokeWidth={1.5} />
           <ThemedText type="subtitle" style={{ textAlign: 'center' }}>
             Không có quyền quản trị
           </ThemedText>
@@ -194,7 +194,7 @@ export default function AdminScreen() {
               <View style={styles.adminTopRow}>
                 <View style={styles.adminIdentity}>
                   <View style={[styles.adminAvatar, { backgroundColor: t.tintSubtle }]}>
-                    <Icon name="person-outline" size={20} themeColor="tint" />
+                    <Icon name="user" size={20} themeColor="tint" />
                   </View>
                   <View>
                     <ThemedText type="smallBold">Quản trị viên</ThemedText>
@@ -248,7 +248,7 @@ export default function AdminScreen() {
             {/* Add New Place Action */}
             <Button
               title="Thêm quán ăn mới"
-              icon={<Icon name="add" size={20} themeColor="tintText" />}
+              icon={<Icon name="plus" size={20} themeColor="tintText" />}
               variant="primary"
               size="lg"
               onPress={() => router.push({ pathname: '/edit-place/[id]', params: { id: 'new' } })}
@@ -276,7 +276,7 @@ export default function AdminScreen() {
               />
               {query ? (
                 <Pressable accessibilityLabel="Xóa tìm kiếm" accessibilityRole="button" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} onPress={() => setQuery('')}>
-                  <Icon name="close-circle" size={18} themeColor="textMuted" />
+                  <Icon name="circle-x" size={18} themeColor="textMuted" />
                 </Pressable>
               ) : null}
             </View>
@@ -302,7 +302,7 @@ export default function AdminScreen() {
             <View style={[styles.adminActionsRow, { borderTopColor: t.border }]}>
               <Button
                 title="Sửa"
-                icon={<Icon name="create-outline" size={17} />}
+                icon={<Icon name="square-pen" size={17} />}
                 variant="secondary"
                 size="sm"
                 style={styles.flex}
@@ -310,7 +310,7 @@ export default function AdminScreen() {
               />
               <Button
                 title={item.is_published ? 'Ẩn khỏi app' : 'Cho hiển thị'}
-                icon={<Icon name={item.is_published ? 'eye-off-outline' : 'eye-outline'} size={17} themeColor={item.is_published ? 'text' : 'tint'} />}
+                icon={<Icon name={item.is_published ? 'eye-off' : 'eye'} size={17} themeColor={item.is_published ? 'text' : 'tint'} />}
                 variant={item.is_published ? 'secondary' : 'tintSubtle'}
                 size="sm"
                 style={styles.flex}

@@ -27,6 +27,8 @@ create table if not exists public.categories (
   emoji text,
   sort_order int not null default 0
 );
+-- Icon Lucide (lucide.dev/icons, vd 'soup'); app hiển thị icon này, không dùng emoji.
+alter table public.categories add column if not exists icon text;
 
 -- ---------- Quán ----------
 create table if not exists public.places (
@@ -187,16 +189,17 @@ create policy "place-photos admin delete" on storage.objects
   for delete to authenticated using (bucket_id = 'place-photos' and public.is_admin());
 
 -- ---------- Danh mục mẫu ----------
-insert into public.categories (name, emoji, sort_order) values
-  ('Bún / Phở', '🍜', 1),
-  ('Cơm', '🍚', 2),
-  ('Bánh mì', '🥖', 3),
-  ('Ốc / Hải sản', '🦪', 4),
-  ('Lẩu / Nướng', '🍲', 5),
-  ('Ăn vặt', '🍢', 6),
-  ('Cà phê / Trà', '☕', 7),
-  ('Chè / Tráng miệng', '🍧', 8)
-on conflict (name) do nothing;
+insert into public.categories (name, icon, sort_order) values
+  ('Bún / Phở', 'soup', 1),
+  ('Cơm', 'egg-fried', 2),
+  ('Bánh mì', 'sandwich', 3),
+  ('Ốc / Hải sản', 'shell', 4),
+  ('Lẩu / Nướng', 'flame', 5),
+  ('Ăn vặt', 'cookie', 6),
+  ('Cà phê / Trà', 'coffee', 7),
+  ('Chè / Tráng miệng', 'ice-cream-bowl', 8)
+-- chỉ điền icon cho danh mục chưa có, không ghi đè icon admin đã đổi
+on conflict (name) do update set icon = coalesce(public.categories.icon, excluded.icon);
 
 -- =====================================================================
 --  SAU KHI tạo tài khoản admin (Authentication → Users → Add user),

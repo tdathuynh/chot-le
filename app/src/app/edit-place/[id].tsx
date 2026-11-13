@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 
-import { Icon } from '@/components/icon';
+import { categoryIcon, Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Center, Chip, Field } from '@/components/ui';
@@ -290,7 +290,7 @@ export default function EditPlace() {
       if (!cover && firstUrl) await setCover(placeId, firstUrl);
 
       setStatus('');
-      notify('Đã lưu quán ✅');
+      notify('Đã lưu quán');
       router.back();
     } catch (e) {
       setStatus('');
@@ -348,7 +348,7 @@ export default function EditPlace() {
               autoCapitalize="none"
               autoCorrect={false}
               placeholder="https://maps.app.goo.gl/…"
-              icon={<Icon name="map-outline" size={18} themeColor="textSecondary" />}
+              icon={<Icon name="map" size={18} themeColor="textSecondary" />}
               hint="Dán link vào là app tự điền tên, địa chỉ, khu vực và toạ độ (chỉ điền ô đang trống)."
             />
             {mapsUrl.trim() ? (
@@ -356,7 +356,7 @@ export default function EditPlace() {
                 title={importing ? 'Đang đọc link…' : 'Tự điền lại từ link'}
                 variant="tintSubtle"
                 size="md"
-                icon={<Icon name="sparkles-outline" size={18} themeColor="tint" />}
+                icon={<Icon name="sparkles" size={18} themeColor="tint" />}
                 loading={importing}
                 disabled={importing}
                 onPress={() => runImport(mapsUrl)}
@@ -390,7 +390,7 @@ export default function EditPlace() {
                     opacity: pressed ? 0.8 : 1,
                   },
                 ]}>
-                <Icon name="location-outline" size={18} themeColor="tint" />
+                <Icon name="map-pin" size={18} themeColor="tint" />
                 <ThemedText
                   type="defaultBold"
                   style={[
@@ -426,7 +426,8 @@ export default function EditPlace() {
                 return (
                   <Chip
                     key={c.id}
-                    label={`${c.emoji ?? ''} ${c.name}`.trim()}
+                    label={c.name}
+                    icon={<Icon name={categoryIcon(c)} size={14} themeColor={on ? 'tintText' : 'textSecondary'} />}
                     selected={on}
                     onPress={() =>
                       setCategoryIds(on ? categoryIds.filter((x) => x !== c.id) : [...categoryIds, c.id])
@@ -551,7 +552,7 @@ export default function EditPlace() {
               HÌNH ẢNH QUÁN ĂN
             </ThemedText>
             <ThemedText type="caption" themeColor="textSecondary">
-              Chạm vào ảnh đã lưu để đặt làm ảnh bìa. Bấm dấu ✕ để xóa ảnh.
+              Chạm vào ảnh đã lưu để đặt làm ảnh bìa. Bấm dấu X để xóa ảnh.
             </ThemedText>
 
             <View style={styles.photosGrid}>
@@ -581,9 +582,7 @@ export default function EditPlace() {
                     accessibilityLabel="Xóa ảnh"
                     hitSlop={9}
                     style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
-                      <ThemedText type="smallBold" style={{ color: '#FFFFFF', fontSize: 12, lineHeight: 14 }}>
-                        ✕
-                      </ThemedText>
+                      <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
                     </Pressable>
                   </View>
                 );
@@ -603,9 +602,7 @@ export default function EditPlace() {
                     accessibilityLabel="Xóa ảnh"
                     hitSlop={9}
                     style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
-                    <ThemedText type="smallBold" style={{ color: '#FFFFFF', fontSize: 12, lineHeight: 14 }}>
-                      ✕
-                    </ThemedText>
+                    <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
                   </Pressable>
                 </View>
               ))}
@@ -614,7 +611,7 @@ export default function EditPlace() {
             <View style={styles.row}>
               <Button
                 title="Chọn ảnh"
-                icon={<Icon name="images-outline" size={18} />}
+                icon={<Icon name="images" size={18} />}
                 variant="secondary"
                 size="md"
                 style={styles.flex}
@@ -623,7 +620,7 @@ export default function EditPlace() {
               {Platform.OS !== 'web' ? (
                 <Button
                   title="Chụp ảnh"
-                  icon={<Icon name="camera-outline" size={18} />}
+                  icon={<Icon name="camera" size={18} />}
                   variant="secondary"
                   size="md"
                   style={styles.flex}
@@ -679,7 +676,7 @@ export default function EditPlace() {
                   onPress={() => updateDish(d.key, { is_signature: !d.is_signature })}
                   hitSlop={{ top: 0, bottom: 0, left: 4, right: 4 }}
                   style={styles.starBtn}>
-                  <Icon name={d.is_signature ? 'star' : 'star-outline'} size={21} themeColor={d.is_signature ? 'tint' : 'textMuted'} />
+                  <Icon name="star" filled={d.is_signature} size={21} themeColor={d.is_signature ? 'tint' : 'textMuted'} />
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -687,14 +684,14 @@ export default function EditPlace() {
                   onPress={() => setDishes(dishes.length > 1 ? dishes.filter((x) => x.key !== d.key) : [newRow()])}
                   hitSlop={{ top: 0, bottom: 0, left: 4, right: 4 }}
                   style={styles.deleteDishBtn}>
-                  <Icon name="trash-outline" size={19} themeColor="textSecondary" />
+                  <Icon name="trash-2" size={19} themeColor="textSecondary" />
                 </Pressable>
               </View>
             ))}
 
             <Button
               title="Thêm món"
-              icon={<Icon name="add" size={18} themeColor="tint" />}
+              icon={<Icon name="plus" size={18} themeColor="tint" />}
               variant="outline"
               size="sm"
               onPress={() => setDishes([...dishes, newRow()])}
@@ -735,7 +732,7 @@ export default function EditPlace() {
               accessibilityState={{ expanded: advancedOpen }}
               onPress={() => setAdvancedOpen(!advancedOpen)}
               style={styles.advancedToggle}>
-              <Icon name="navigate-circle-outline" size={18} themeColor="textSecondary" />
+              <Icon name="locate" size={18} themeColor="textSecondary" />
               <View style={styles.flex}>
                 <ThemedText type="smallBold">Vị trí chính xác (cho “Gần tôi”)</ThemedText>
                 <ThemedText type="caption" themeColor={coordsText.trim() || coordsFromMapsUrl(mapsUrl) ? 'success' : 'textSecondary'}>
@@ -763,7 +760,7 @@ export default function EditPlace() {
                   title={locating ? 'Đang lấy vị trí…' : 'Dùng vị trí hiện tại của tôi'}
                   variant="secondary"
                   size="md"
-                  icon={<Icon name="locate-outline" size={18} />}
+                  icon={<Icon name="locate-fixed" size={18} />}
                   disabled={locating}
                   onPress={async () => {
                     setLocating(true);
@@ -861,9 +858,7 @@ export default function EditPlace() {
                 onPress={() => setDistrictModalOpen(false)}
                 hitSlop={12}
                 style={[styles.modalCloseBtn, { backgroundColor: t.backgroundElement }]}>
-                <ThemedText type="smallBold" style={{ color: t.textSecondary }}>
-                  ✕
-                </ThemedText>
+                <Icon name="x" size={16} color={t.textSecondary} />
               </Pressable>
             </View>
 

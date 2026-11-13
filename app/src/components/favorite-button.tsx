@@ -43,7 +43,7 @@ export function FavoriteButton({
           transform: [{ scale: pressed ? 0.94 : 1 }],
         },
       ]}>
-      <Icon name={fav ? 'heart' : 'heart-outline'} size={Math.round(size * 0.48)} themeColor={fav ? 'tint' : 'textSecondary'} />
+      <Icon name="heart" filled={fav} size={Math.round(size * 0.48)} themeColor={fav ? 'tint' : 'textSecondary'} />
     </Pressable>
   );
 }

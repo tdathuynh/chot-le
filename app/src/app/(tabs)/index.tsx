@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon } from '@/components/icon';
+import { categoryIcon, Icon } from '@/components/icon';
 import { FeaturedPlaceCard, PlaceCard } from '@/components/place-card';
 import { PlacesMap } from '@/components/places-map';
 import { RandomPicker } from '@/components/random-picker';
@@ -266,7 +266,7 @@ export default function HomeScreen() {
               onPress={() => runSmartSearch(query)}
               disabled={parsing}
               style={[styles.understandBtn, { backgroundColor: t.tint }]}>
-              <Icon name={parsing ? 'hourglass-outline' : 'sparkles'} size={17} themeColor="tintText" />
+              <Icon name={parsing ? 'hourglass' : 'sparkles'} size={17} themeColor="tintText" />
             </Pressable>
           ) : query ? (
             <Pressable
@@ -275,7 +275,7 @@ export default function HomeScreen() {
               onPress={() => setQuery('')}
               hitSlop={8}
               style={styles.clearSearchBtn}>
-              <Icon name="close-circle" size={18} themeColor="textMuted" />
+              <Icon name="circle-x" size={18} themeColor="textMuted" />
             </Pressable>
           ) : null}
         </View>
@@ -293,7 +293,7 @@ export default function HomeScreen() {
             },
             Shadows.soft,
           ]}>
-          <Icon name="options-outline" size={18} color={activeModalFiltersCount > 0 ? t.tintText : t.text} />
+          <Icon name="sliders-horizontal" size={18} color={activeModalFiltersCount > 0 ? t.tintText : t.text} />
           <ThemedText
             type="smallBold"
             style={{
@@ -318,7 +318,7 @@ export default function HomeScreen() {
             <Chip
               key={q}
               label={q}
-              icon={<Icon name="sparkles-outline" size={14} themeColor="tint" />}
+              icon={<Icon name="sparkles" size={14} themeColor="tint" />}
               onPress={() => {
                 upd({ query: q });
                 runSmartSearch(q);
@@ -331,9 +331,9 @@ export default function HomeScreen() {
       {/* Đang gõ câu: nhắc bấm Hiểu câu thay vì hiện "0 quán" */}
       {typingRequest && !parsing ? (
         <View style={styles.understoodHead}>
-          <Icon name="sparkles-outline" size={15} themeColor="tint" />
+          <Icon name="sparkles" size={15} themeColor="tint" />
           <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
-            Bấm nút <ThemedText type="smallBold" style={{ color: t.tint }}>✦</ThemedText> hoặc Enter để app hiểu câu này
+            Bấm nút lấp lánh ở ô tìm kiếm hoặc Enter để app hiểu câu này
           </ThemedText>
         </View>
       ) : null}
@@ -385,7 +385,7 @@ export default function HomeScreen() {
                 : 'Gần tôi'
               : 'Gần tôi'
           }
-          icon={<Icon name={nearMe ? 'navigate' : 'navigate-outline'} size={14} color={nearMe ? t.tintText : t.tint} />}
+          icon={<Icon name="navigation" filled={nearMe} size={14} color={nearMe ? t.tintText : t.tint} />}
           selected={nearMe}
           onPress={toggleNearMe}
         />
@@ -463,7 +463,7 @@ export default function HomeScreen() {
               Shadows.soft,
             ]}>
             <View style={[styles.categoryEmojiBox, { backgroundColor: categoryId === null ? 'rgba(255,255,255,0.2)' : t.backgroundElement }]}>
-              <ThemedText style={{ fontSize: 18 }}>🍽️</ThemedText>
+              <Icon name="utensils-crossed" size={18} color={categoryId === null ? t.tintText : t.text} />
             </View>
             <ThemedText
               type="smallBold"
@@ -496,7 +496,7 @@ export default function HomeScreen() {
                     styles.categoryEmojiBox,
                     { backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : t.backgroundElement },
                   ]}>
-                  <ThemedText style={{ fontSize: 18 }}>{c.emoji || '🍲'}</ThemedText>
+                  <Icon name={categoryIcon(c)} size={18} color={isSelected ? t.tintText : t.text} />
                 </View>
                 <ThemedText
                   type="smallBold"
@@ -589,7 +589,7 @@ export default function HomeScreen() {
           ListEmptyComponent={
             loading ? undefined : (
               <View style={[styles.emptyBox, { backgroundColor: t.card, borderColor: t.cardBorder }, Shadows.soft]}>
-                <Icon name="restaurant-outline" size={40} themeColor="textMuted" />
+                <Icon name="utensils-crossed" size={40} themeColor="textMuted" />
                 <ThemedText type="subtitle" style={{ textAlign: 'center' }}>
                   {error ? 'Không thể tải dữ liệu' : 'Không tìm thấy quán nào'}
                 </ThemedText>
@@ -627,7 +627,7 @@ export default function HomeScreen() {
             { backgroundColor: t.text, bottom: (selectedPlace ? 168 : Spacing.four) + tabBarOffset, opacity: pressed ? 0.85 : 1 },
             Shadows.strong,
           ]}>
-          <Icon name={viewMode === 'list' ? 'map-outline' : 'list-outline'} size={18} color={t.background} />
+          <Icon name={viewMode === 'list' ? 'map' : 'list'} size={18} color={t.background} />
           <ThemedText type="smallBold" style={{ color: t.background }}>
             {viewMode === 'list' ? 'Bản đồ' : 'Danh sách'}
           </ThemedText>
@@ -669,9 +669,7 @@ export default function HomeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Đóng bộ lọc"
                   style={[styles.closeIconBtn, { backgroundColor: t.backgroundElement }]}>
-                  <ThemedText type="smallBold" style={{ color: t.textSecondary }}>
-                    ✕
-                  </ThemedText>
+                  <Icon name="x" size={16} color={t.textSecondary} />
                 </Pressable>
               </View>
 

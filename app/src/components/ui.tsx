@@ -13,6 +13,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { Radii, Shadows, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -143,7 +144,7 @@ export function Chip({
       </ThemedText>
       {onRemove ? (
         <View style={styles.chipRemove}>
-          <ThemedText type="smallBold" style={{ color: selected ? t.tintText : t.textSecondary }}>✕</ThemedText>
+          <Icon name="x" size={16} color={selected ? t.tintText : t.textSecondary} />
         </View>
       ) : null}
     </Pressable>
@@ -330,9 +331,7 @@ export function ModalSheet({
               accessibilityRole="button"
               accessibilityLabel="Đóng"
               style={[styles.modalCloseBtn, { backgroundColor: t.backgroundElement }]}>
-              <ThemedText type="smallBold" style={{ color: t.textSecondary }}>
-                ✕
-              </ThemedText>
+              <Icon name="x" size={16} color={t.textSecondary} />
             </Pressable>
           </View>
           <View style={styles.modalBody}>{children}</View>

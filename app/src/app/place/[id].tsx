@@ -63,7 +63,7 @@ export default function PlaceDetail() {
       <ThemedView style={styles.flex}>
         <Stack.Screen options={{ title: 'Không tìm thấy', headerShown: true }} />
         <Center>
-          <ThemedText style={{ fontSize: 44 }}>🍽️</ThemedText>
+          <Icon name="utensils-crossed" size={44} themeColor="textSecondary" strokeWidth={1.5} />
           <ThemedText type="subtitle">Không tìm thấy quán</ThemedText>
           <ThemedText themeColor="textSecondary">Quán ăn này không tồn tại hoặc đã bị xóa.</ThemedText>
           <Button title="Quay lại trang chủ" variant="primary" onPress={() => router.back()} />
@@ -142,7 +142,7 @@ ${directionsUrl(place)}`;
             </ScrollView>
           ) : (
             <View style={[styles.heroPlaceholder, { backgroundColor: t.backgroundElement }]}>
-              <ThemedText style={{ fontSize: 64 }}>🍲</ThemedText>
+              <Icon name="utensils-crossed" size={64} themeColor="textMuted" strokeWidth={1.25} />
             </View>
           )}
 
@@ -153,7 +153,7 @@ ${directionsUrl(place)}`;
               accessibilityLabel="Quay lại"
               onPress={() => router.back()}
               style={[styles.floatingIconBtn, { backgroundColor: t.card }]}>
-              <Icon name="arrow-back" size={22} />
+              <Icon name="arrow-left" size={22} />
             </Pressable>
 
             <View style={styles.floatingRightBtns}>
@@ -163,7 +163,7 @@ ${directionsUrl(place)}`;
                   accessibilityLabel="Chỉnh sửa quán"
                   onPress={() => router.push({ pathname: '/edit-place/[id]', params: { id: place.id } })}
                   style={[styles.floatingIconBtn, { backgroundColor: t.card }]}>
-                  <Icon name="create-outline" size={20} />
+                  <Icon name="square-pen" size={20} />
                 </Pressable>
               ) : null}
 
@@ -177,7 +177,7 @@ ${directionsUrl(place)}`;
           {photos.length > 1 ? (
             <View style={styles.photoIndicatorsWrap}>
               <View style={[styles.photoCounterBadge, { backgroundColor: 'rgba(0, 0, 0, 0.65)' }]}>
-                <Icon name="images-outline" size={13} color="#FFFFFF" />
+                <Icon name="images" size={13} color="#FFFFFF" />
                 <ThemedText type="captionBold" style={{ color: '#FFFFFF' }}>
                   {activePhotoIndex + 1}/{photos.length}
                 </ThemedText>
@@ -221,7 +221,7 @@ ${directionsUrl(place)}`;
                   Hợp để:
                 </ThemedText>
                 {occasions.map((o) => {
-                  const icon = OCCASIONS.find((x) => x.key === o)?.icon ?? 'checkmark';
+                  const icon = OCCASIONS.find((x) => x.key === o)?.icon ?? 'check';
                   return (
                     <View key={o} style={[styles.occasionPill, { backgroundColor: t.backgroundElement }]}>
                       <Icon name={icon} size={14} themeColor="text" />
@@ -248,7 +248,7 @@ ${directionsUrl(place)}`;
               onPress={() => Linking.openURL(directionsUrl(place))}
               style={styles.infoRow}>
               <View style={[styles.iconCircle, { backgroundColor: t.tintSubtle }]}>
-                <Icon name="location-outline" size={18} themeColor="tint" />
+                <Icon name="map-pin" size={18} themeColor="tint" />
               </View>
               <View style={styles.infoTextGroup}>
                 <ThemedText type="smallBold">Địa chỉ</ThemedText>
@@ -272,7 +272,7 @@ ${directionsUrl(place)}`;
                 accessibilityRole="button"
                 onPress={() => requestLocation()}
                 style={[styles.distanceLink, { borderTopColor: t.border }]}>
-                <Icon name="navigate-outline" size={15} themeColor="tint" />
+                <Icon name="navigation" size={15} themeColor="tint" />
                 <ThemedText type="smallBold" style={{ color: t.tint }}>
                   {loc.status === 'loading' ? 'Đang định vị…' : 'Xem quán cách bạn bao xa'}
                 </ThemedText>
@@ -283,7 +283,7 @@ ${directionsUrl(place)}`;
             {price ? (
               <View style={[styles.infoRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.border }]}>
                 <View style={[styles.iconCircle, { backgroundColor: t.tintSubtle }]}>
-                  <Icon name="pricetag-outline" size={18} themeColor="tint" />
+                  <Icon name="tag" size={18} themeColor="tint" />
                 </View>
                 <View style={styles.infoTextGroup}>
                   <ThemedText type="smallBold">Mức giá tham khảo</ThemedText>
@@ -298,7 +298,7 @@ ${directionsUrl(place)}`;
             {place.open_time && place.close_time ? (
               <View style={[styles.infoRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.border }]}>
                 <View style={[styles.iconCircle, { backgroundColor: t.tintSubtle }]}>
-                  <Icon name="time-outline" size={18} themeColor="tint" />
+                  <Icon name="clock" size={18} themeColor="tint" />
                 </View>
                 <View style={styles.infoTextGroup}>
                   <ThemedText type="smallBold">Giờ hoạt động</ThemedText>
@@ -318,7 +318,7 @@ ${directionsUrl(place)}`;
                 onPress={() => Linking.openURL(`tel:${place.phone!.replace(/\s/g, '')}`)}
                 style={[styles.infoRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.border }]}>
                 <View style={[styles.iconCircle, { backgroundColor: t.tintSubtle }]}>
-                  <Icon name="call-outline" size={18} themeColor="tint" />
+                  <Icon name="phone" size={18} themeColor="tint" />
                 </View>
                 <View style={styles.infoTextGroup}>
                   <ThemedText type="smallBold">Số điện thoại</ThemedText>
@@ -464,7 +464,7 @@ ${directionsUrl(place)}`;
               styles.bottomIconBtn,
               { borderColor: t.border, backgroundColor: t.card, opacity: pressed ? 0.7 : 1 },
             ]}>
-            <Icon name="share-outline" size={22} themeColor="text" />
+            <Icon name="share" size={22} themeColor="text" />
           </Pressable>
 
           {place.phone ? (
@@ -472,7 +472,7 @@ ${directionsUrl(place)}`;
               title="Gọi"
               variant="secondary"
               size="lg"
-              icon={<Icon name="call-outline" size={18} />}
+              icon={<Icon name="phone" size={18} />}
               onPress={() => Linking.openURL(`tel:${place.phone!.replace(/\s/g, '')}`)}
               style={styles.bottomCallBtn}
             />
@@ -482,7 +482,7 @@ ${directionsUrl(place)}`;
             title="Chỉ đường"
             variant="primary"
             size="lg"
-            icon={<Icon name="navigate" size={18} themeColor="tintText" />}
+            icon={<Icon name="navigation" size={18} themeColor="tintText" />}
             onPress={() => Linking.openURL(directionsUrl(place))}
             style={styles.bottomDirectionsBtn}
           />

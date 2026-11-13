@@ -2,6 +2,8 @@ export type Category = {
   id: number;
   name: string;
   emoji: string | null;
+  /** Tên icon Lucide (lucide.dev/icons), vd 'soup'. App hiển thị cái này, không dùng emoji. */
+  icon: string | null;
   sort_order: number;
 };
 
@@ -55,11 +57,11 @@ export type PlaceWithRelations = Place & {
 
 /** Mục đích đi ăn — lưu khóa (key) trong cột places.occasions. */
 export const OCCASIONS = [
-  { key: 'ban-be', label: 'Đi nhóm bạn', icon: 'people-outline' },
-  { key: 'hen-ho', label: 'Hẹn hò', icon: 'wine-outline' },
-  { key: 'mot-minh', label: 'Đi một mình', icon: 'person-outline' },
-  { key: 'gia-dinh', label: 'Gia đình', icon: 'home-outline' },
-  { key: 'cong-viec', label: 'Làm việc / Gặp đối tác', icon: 'briefcase-outline' },
+  { key: 'ban-be', label: 'Đi nhóm bạn', icon: 'users' },
+  { key: 'hen-ho', label: 'Hẹn hò', icon: 'wine' },
+  { key: 'mot-minh', label: 'Đi một mình', icon: 'user' },
+  { key: 'gia-dinh', label: 'Gia đình', icon: 'house' },
+  { key: 'cong-viec', label: 'Làm việc / Gặp đối tác', icon: 'briefcase' },
 ] as const;
 
 export type OccasionKey = (typeof OCCASIONS)[number]['key'];
@@ -68,13 +70,13 @@ export const occasionLabel = (key: string) => OCCASIONS.find((o) => o.key === ke
 
 /** Tiện ích quán — lưu khóa trong cột places.amenities. */
 export const AMENITIES = [
-  { key: 'may-lanh', label: 'Máy lạnh', icon: 'snow-outline' },
-  { key: 'giu-xe', label: 'Chỗ để xe máy', icon: 'bicycle-outline' },
-  { key: 'o-to', label: 'Chỗ đậu ô tô', icon: 'car-outline' },
-  { key: 'wifi', label: 'Wifi', icon: 'wifi-outline' },
-  { key: 'the', label: 'Nhận thẻ / chuyển khoản', icon: 'card-outline' },
-  { key: 'phong-rieng', label: 'Phòng riêng', icon: 'key-outline' },
-  { key: 'ngoai-troi', label: 'Ngồi ngoài trời', icon: 'sunny-outline' },
+  { key: 'may-lanh', label: 'Máy lạnh', icon: 'snowflake' },
+  { key: 'giu-xe', label: 'Chỗ để xe máy', icon: 'bike' },
+  { key: 'o-to', label: 'Chỗ đậu ô tô', icon: 'car' },
+  { key: 'wifi', label: 'Wifi', icon: 'wifi' },
+  { key: 'the', label: 'Nhận thẻ / chuyển khoản', icon: 'credit-card' },
+  { key: 'phong-rieng', label: 'Phòng riêng', icon: 'key-round' },
+  { key: 'ngoai-troi', label: 'Ngồi ngoài trời', icon: 'sun' },
 ] as const;
 
 export const amenityLabel = (key: string) => AMENITIES.find((a) => a.key === key)?.label ?? key;

@@ -11,7 +11,7 @@ import { Pressable, View, StyleSheet, useWindowDimensions, type PressableProps }
 import { MaxContentWidth, Radii, Shadows, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '@/components/icon';
 
 import { ThemedText } from './themed-text';
 
@@ -78,7 +78,7 @@ export function CustomTabList(props: TabListProps) {
           Shadows.medium,
         ]}>
         <View style={[styles.brandRow, compact && { paddingLeft: 6 }]}>
-          <Ionicons name="restaurant" size={20} color={t.tint} />
+          <Icon name="utensils-crossed" size={20} color={t.tint} />
           {!compact && <ThemedText type="defaultBold" style={{ color: t.tint }}>
             Ăn Gì HCM
           </ThemedText>}

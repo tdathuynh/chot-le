@@ -99,7 +99,7 @@ export function RandomPicker({
               accessibilityRole="button"
               accessibilityLabel="Đóng"
               style={[styles.closeBtn, { backgroundColor: t.backgroundElement }]}>
-              <Icon name="close" size={20} themeColor="textSecondary" />
+              <Icon name="x" size={20} themeColor="textSecondary" />
             </Pressable>
           </View>
 
@@ -118,7 +118,7 @@ export function RandomPicker({
                     <Image source={{ uri: pick.cover_image_url }} style={styles.image} contentFit="cover" transition={250} />
                   ) : (
                     <View style={[styles.image, styles.center]}>
-                      <ThemedText style={{ fontSize: 48 }}>🍲</ThemedText>
+                      <Icon name="utensils-crossed" size={48} themeColor="textMuted" strokeWidth={1.5} />
                     </View>
                   )}
                 </Pressable>
@@ -166,7 +166,7 @@ export function RandomPicker({
                   title="Chỉ đường"
                   variant="primary"
                   size="lg"
-                  icon={<Icon name="navigate" size={18} themeColor="tintText" />}
+                  icon={<Icon name="navigation" size={18} themeColor="tintText" />}
                   onPress={() => Linking.openURL(directionsUrl(pick))}
                   style={styles.flex}
                 />
@@ -219,12 +219,12 @@ export function RandomPicker({
                 <ThemedText type="smallBold" style={{ color: t.tint }}>
                   Xem thực đơn và chi tiết
                 </ThemedText>
-                <Icon name="chevron-forward" size={16} themeColor="tint" />
+                <Icon name="chevron-right" size={16} themeColor="tint" />
               </Pressable>
             </View>
           ) : (
             <View style={[styles.body, styles.center, { paddingVertical: Spacing.five }]}>
-              <Icon name="search-outline" size={36} themeColor="textMuted" />
+              <Icon name="search" size={36} themeColor="textMuted" />
               <ThemedText type="defaultBold" style={{ textAlign: 'center' }}>
                 Không có quán nào khớp bộ lọc
               </ThemedText>

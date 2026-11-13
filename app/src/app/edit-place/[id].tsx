@@ -34,6 +34,7 @@ import { useAuth } from '@/lib/auth';
 import { confirmAsync, notify } from '@/lib/confirm';
 import { formatPrice, parsePrice, parseTime, shortTime } from '@/lib/format';
 import { coordsFromMapsUrl, parseCoords, requestLocation } from '@/lib/location';
+import { importFromMapsLink, isMapsLink } from '@/lib/maps-link';
 import { AMENITIES, DISTRICTS, OCCASIONS, type Category, type Photo } from '@/lib/types';
 
 // react-native-web tô núm công tắc màu xanh ngọc mặc định → ép về màu theme.
@@ -81,6 +82,49 @@ export default function EditPlace() {
 
   // District selector modal
   const [districtModalOpen, setDistrictModalOpen] = useState(false);
+
+  // Dán link Google Maps → tự điền tên, địa chỉ, quận, toạ độ (chỉ điền ô đang trống)
+  const [importing, setImporting] = useState(false);
+  const [importNote, setImportNote] = useState('');
+
+  async function runImport(link: string) {
+    if (!isMapsLink(link)) {
+      notify('Link chưa đúng', 'Hãy dán link Google Maps (vd https://maps.app.goo.gl/…).');
+      return;
+    }
+    setImporting(true);
+    setImportNote('');
+    try {
+      const info = await importFromMapsLink(link);
+      const filled: string[] = [];
+      if (info.name && !name.trim()) {
+        setName(info.name);
+        filled.push('tên');
+      }
+      if (info.address && !address.trim()) {
+        setAddress(info.address);
+        filled.push('địa chỉ');
+      }
+      if (info.district && !district) {
+        setDistrict(info.district);
+        filled.push(info.districtGuessed ? `khu vực (tự đoán: ${info.district}, kiểm tra lại)` : 'khu vực');
+      }
+      if (info.coords && !coordsText.trim()) {
+        setCoordsText(`${info.coords.latitude.toFixed(6)}, ${info.coords.longitude.toFixed(6)}`);
+        filled.push('toạ độ');
+      }
+      if (filled.length) setImportNote(`Đã tự điền: ${filled.join(', ')}.`);
+      else if (info.name || info.address || info.coords) setImportNote('Các ô đã có sẵn nội dung nên giữ nguyên.');
+      else
+        setImportNote(
+          Platform.OS === 'web'
+            ? 'Không đọc được link rút gọn trên web. Mở link trong trình duyệt rồi dán link đầy đủ trên thanh địa chỉ.'
+            : 'Không đọc được thông tin từ link này, hãy nhập tay.'
+        );
+    } finally {
+      setImporting(false);
+    }
+  }
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {});
@@ -288,6 +332,36 @@ export default function EditPlace() {
             <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardHeader}>
               THÔNG TIN CƠ BẢN
             </ThemedText>
+            <Field
+              label="Link Google Maps"
+              value={mapsUrl}
+              onChangeText={(v) => {
+                const pasted = v.trim().length - mapsUrl.trim().length > 10;
+                setMapsUrl(v);
+                if (pasted && isMapsLink(v)) runImport(v);
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="https://maps.app.goo.gl/…"
+              icon={<Icon name="map-outline" size={18} themeColor="textSecondary" />}
+              hint="Dán link vào là app tự điền tên, địa chỉ, khu vực và toạ độ (chỉ điền ô đang trống)."
+            />
+            {mapsUrl.trim() ? (
+              <Button
+                title={importing ? 'Đang đọc link…' : 'Tự điền lại từ link'}
+                variant="tintSubtle"
+                size="md"
+                icon={<Icon name="sparkles-outline" size={18} themeColor="tint" />}
+                loading={importing}
+                disabled={importing}
+                onPress={() => runImport(mapsUrl)}
+              />
+            ) : null}
+            {importNote ? (
+              <ThemedText type="caption" themeColor="textSecondary">
+                {importNote}
+              </ThemedText>
+            ) : null}
             <Field label="Tên quán ăn *" value={name} onChangeText={setName} placeholder="Vd: Bún bò Huế O Xuân" />
             <Field
               label="Địa chỉ chi tiết *"
@@ -649,14 +723,6 @@ export default function EditPlace() {
               onChangeText={setPhone}
               placeholder="0901234567"
               keyboardType="phone-pad"
-            />
-            <Field
-              label="Link Google Maps"
-              value={mapsUrl}
-              onChangeText={setMapsUrl}
-              autoCapitalize="none"
-              placeholder="https://maps.app.goo.gl/…"
-              hint="Không bắt buộc. Nếu để trống, app sẽ tự định vị theo tên quán & địa chỉ."
             />
             {/* Nâng cao: toạ độ chính xác (ẩn mặc định cho form gọn) */}
             <Pressable

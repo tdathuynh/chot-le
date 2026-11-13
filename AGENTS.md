@@ -28,6 +28,7 @@ app/                         Expo app (SDK 58, Expo Router, TypeScript strict)
   src/lib/favorites.ts       Yêu thích lưu local (useSyncExternalStore)
   src/lib/filters.ts         Bộ lọc dùng chung (Filters, applyFilters) + hiểu câu tiếng Việt trên máy (parseQueryLocal)
   src/lib/location.ts        Vị trí người dùng (expo-location), khoảng cách, toạ độ từ link Google Maps, directionsUrl
+  src/lib/maps-link.ts       Dán link Google Maps → tự điền tên, địa chỉ, quận (đoán theo toạ độ nếu thiếu), toạ độ; địa chỉ dự phòng từ OpenStreetMap
   src/components/random-picker.tsx  Bảng "Hôm nay ăn gì?" (gợi ý ngẫu nhiên theo bộ lọc)
   src/components/icon.tsx    Icon đơn sắc (Ionicons) — dùng thay emoji cho nút/nhãn
   src/components/places-map(.web).tsx  Bản đồ quán: Leaflet + OpenStreetMap trong WebView (điện thoại) / iframe (web); HTML ở src/lib/map-html.ts

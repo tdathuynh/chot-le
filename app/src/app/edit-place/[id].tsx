@@ -113,6 +113,11 @@ export default function EditPlace() {
         setCoordsText(`${info.coords.latitude.toFixed(6)}, ${info.coords.longitude.toFixed(6)}`);
         filled.push('toạ độ');
       }
+      if (info.hours && !openTime.trim() && !closeTime.trim()) {
+        setOpenTime(info.hours.open);
+        setCloseTime(info.hours.close);
+        filled.push(info.hours.approx ? 'giờ mở cửa (ngày/ca khác nhau, kiểm tra lại)' : 'giờ mở cửa');
+      }
       if (filled.length) setImportNote(`Đã tự điền: ${filled.join(', ')}.`);
       else if (info.name || info.address || info.coords) setImportNote('Các ô đã có sẵn nội dung nên giữ nguyên.');
       else

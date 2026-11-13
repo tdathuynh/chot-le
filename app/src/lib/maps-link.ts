@@ -12,6 +12,8 @@ export type MapsLinkInfo = {
   /** true nếu quận được đoán theo toạ độ (không có trong địa chỉ) → admin nên kiểm tra lại. */
   districtGuessed?: boolean;
   coords?: Coords;
+  /** Giờ mở/đóng "HH:MM" lấy từ OpenStreetMap (ít quán có). Bằng nhau = mở cả ngày. */
+  hours?: { open: string; close: string; approx: boolean };
 };
 
 /** Có phải link Google Maps (đầy đủ hoặc rút gọn) không. */
@@ -46,13 +48,18 @@ export async function importFromMapsLink(link: string): Promise<MapsLinkInfo> {
     if (!fullAddress && rest.length) fullAddress = rest.join(', ');
   }
 
-  if (!fullAddress && coords) {
+  let openingHours: string | undefined;
+  if (coords) {
     const osm = await reverseGeocode(coords);
     if (osm) {
-      fullAddress = osm.address;
+      if (!fullAddress) fullAddress = osm.address;
       if (!info.name && osm.name) info.name = osm.name;
+      openingHours = osm.openingHours;
     }
+    if (!openingHours && info.name) openingHours = await osmHoursByName(info.name, coords);
   }
+  const hours = openingHours ? parseOpeningHours(openingHours) : null;
+  if (hours) info.hours = hours;
 
   const district = fullAddress ? districtFromText(fullAddress) : null;
   if (district) info.district = district;
@@ -126,15 +133,21 @@ function ogTitle(html: string): string | null {
 
 type NominatimResult = {
   name?: string;
+  lat?: string;
+  lon?: string;
   address?: Record<string, string>;
+  extratags?: Record<string, string> | null;
 };
 
-async function reverseGeocode(c: Coords): Promise<{ name?: string; address: string } | null> {
+const NOMINATIM = 'https://nominatim.openstreetmap.org';
+// Nominatim yêu cầu định danh ứng dụng (trình duyệt tự gửi Referer, không cho đặt User-Agent).
+const NOMINATIM_INIT = Platform.OS === 'web' ? undefined : { headers: { 'User-Agent': 'AnGiHCM/1.0 (Expo app)' } };
+
+async function reverseGeocode(c: Coords): Promise<{ name?: string; address: string; openingHours?: string } | null> {
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=vi&lat=${c.latitude}&lon=${c.longitude}`,
-      // Nominatim yêu cầu định danh ứng dụng (trình duyệt tự gửi Referer, không cho đặt User-Agent).
-      Platform.OS === 'web' ? undefined : { headers: { 'User-Agent': 'AnGiHCM/1.0 (Expo app)' } }
+      `${NOMINATIM}/reverse?format=jsonv2&addressdetails=1&extratags=1&zoom=18&accept-language=vi&lat=${c.latitude}&lon=${c.longitude}`,
+      NOMINATIM_INIT
     );
     if (!res.ok) return null;
     const d = (await res.json()) as NominatimResult;
@@ -144,10 +157,74 @@ async function reverseGeocode(c: Coords): Promise<{ name?: string; address: stri
     const address = [street, ward, a.city_district].filter(Boolean).join(', ');
     if (!address) return null;
     const name = a.amenity ?? a.shop ?? d.name;
-    return { name: name || undefined, address };
+    return { name: name || undefined, address, openingHours: d.extratags?.opening_hours };
   } catch {
     return null;
   }
+}
+
+/** Tìm quán cùng tên trong bán kính ~150 m có ghi giờ mở cửa trên OSM. */
+async function osmHoursByName(name: string, c: Coords): Promise<string | undefined> {
+  const d = 0.0015;
+  const viewbox = [c.longitude - d, c.latitude + d, c.longitude + d, c.latitude - d].join(',');
+  try {
+    const res = await fetch(
+      `${NOMINATIM}/search?format=jsonv2&extratags=1&limit=5&bounded=1&viewbox=${viewbox}&q=${encodeURIComponent(name)}`,
+      NOMINATIM_INIT
+    );
+    if (!res.ok) return undefined;
+    const list = (await res.json()) as NominatimResult[];
+    const hit = list
+      .filter((r) => r.extratags?.opening_hours && r.lat && r.lon)
+      .map((r) => ({ r, km: distanceKm(c, { latitude: Number(r.lat), longitude: Number(r.lon) }) }))
+      .sort((a, b) => a.km - b.km)[0];
+    return hit && hit.km <= 0.15 ? hit.r.extratags!.opening_hours : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// ---------- Giờ mở cửa dạng OSM ("Mo-Su 06:00-22:00; Sa 07:00-23:00") ----------
+
+const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+function countDays(rule: string): number {
+  const spec = rule.split(/\d{1,2}:\d{2}/)[0];
+  let n = 0;
+  for (const m of spec.matchAll(/(Mo|Tu|We|Th|Fr|Sa|Su)(?:\s*-\s*(Mo|Tu|We|Th|Fr|Sa|Su))?/g)) {
+    const a = DAYS.indexOf(m[1]);
+    const b = m[2] ? DAYS.indexOf(m[2]) : a;
+    n += ((b - a + 7) % 7) + 1;
+  }
+  return n || 7; // không ghi thứ = mọi ngày
+}
+
+const hhmm = (h: string, m: string) => `${String(Number(h) % 24).padStart(2, '0')}:${m}`;
+
+/**
+ * Lấy 1 khung giờ mở/đóng đại diện: luật áp dụng cho nhiều ngày nhất; nếu chia ca
+ * (06:00-10:00,16:00-21:00) thì lấy giờ mở ca đầu → giờ đóng ca cuối. approx = có ngày/ca khác.
+ */
+export function parseOpeningHours(raw: string): { open: string; close: string; approx: boolean } | null {
+  const s = raw.trim();
+  if (/^24\/7$/.test(s)) return { open: '00:00', close: '00:00', approx: false };
+  const rules = s.split(/\s*;\s*/).filter(Boolean);
+  let best: { days: number; ranges: [string, string][] } | null = null;
+  for (const rule of rules) {
+    if (/\b(off|closed)\b/i.test(rule)) continue;
+    const ranges = [...rule.matchAll(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/g)].map(
+      (m) => [hhmm(m[1], m[2]), hhmm(m[3], m[4])] as [string, string]
+    );
+    if (!ranges.length) continue;
+    const days = countDays(rule);
+    if (!best || days > best.days) best = { days, ranges };
+  }
+  if (!best) return null;
+  return {
+    open: best.ranges[0][0],
+    close: best.ranges[best.ranges.length - 1][1],
+    approx: rules.length > 1 || best.ranges.length > 1,
+  };
 }
 
 // ---------- Quận ----------

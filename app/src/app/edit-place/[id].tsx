@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 
 import { categoryIcon, Icon } from '@/components/icon';
+import { PhotoEditor, type CropAspect, type EditedPhoto } from '@/components/photo-editor';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Center, Chip, Field } from '@/components/ui';
@@ -104,6 +105,16 @@ export default function EditPlace() {
   const [pending, setPending] = useState<PendingPhoto[]>([]);
   // Ảnh bìa mới chọn từ máy (chưa upload). Có giá trị thì nó thắng `cover` khi lưu.
   const [pendingCover, setPendingCover] = useState<PendingPhoto | null>(null);
+  // Trình chỉnh ảnh (cắt/xoay/lật/nén): ảnh đang chỉnh và kết quả sẽ đi đâu.
+  //  'new-cover'  ảnh bìa vừa chọn/chụp (thay ảnh bìa cũ)
+  //  'cover'      chỉnh lại ảnh bìa đang chờ lưu
+  //  'append'     ảnh bên trong vừa chọn/chụp (thêm vào cuối)
+  //  number       chỉnh lại ảnh bên trong đang chờ lưu ở vị trí đó
+  const [editing, setEditing] = useState<{
+    uri: string;
+    target: 'new-cover' | 'cover' | 'append' | number;
+    aspect: CropAspect;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -235,18 +246,42 @@ export default function EditPlace() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      quality: 0.6,
+      quality: 0.8,
     });
     if (res.canceled) return;
+    // 1 ảnh → mở trình chỉnh luôn; nhiều ảnh → thêm hết, ảnh nào cần thì bấm nút chỉnh trên ảnh.
+    if (res.assets.length === 1) {
+      setEditing({ uri: res.assets[0].uri, target: 'append', aspect: 'free' });
+      return;
+    }
     setPending((list) => [...list, ...res.assets.map((a) => ({ uri: a.uri, mimeType: a.mimeType }))]);
   };
 
   const takePhoto = async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) return notify('Chưa cấp quyền camera');
-    const res = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6 });
+    const res = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (res.canceled) return;
-    setPending((list) => [...list, { uri: res.assets[0].uri, mimeType: res.assets[0].mimeType }]);
+    setEditing({ uri: res.assets[0].uri, target: 'append', aspect: 'free' });
+  };
+
+  /** Kết quả từ trình chỉnh ảnh → đặt vào đúng chỗ. */
+  const onEdited = (photo: EditedPhoto) => {
+    if (!editing) return;
+    const item: PendingPhoto = { uri: photo.uri, mimeType: photo.mimeType };
+    const { target } = editing;
+    if (target === 'new-cover') {
+      // Ảnh bìa chờ lưu cũ (nếu có) không mất: chuyển xuống mục ảnh bên trong.
+      if (pendingCover) setPending((list) => [pendingCover, ...list]);
+      setPendingCover(item);
+    } else if (target === 'cover') {
+      setPendingCover(item);
+    } else if (target === 'append') {
+      setPending((list) => [...list, item]);
+    } else {
+      setPending((list) => list.map((x, j) => (j === target ? item : x)));
+    }
+    setEditing(null);
   };
 
   /** Chọn/đổi ảnh bìa: 1 ảnh, cắt khung ngang cho đẹp trên thẻ quán. */
@@ -255,17 +290,11 @@ export default function EditPlace() {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) return notify('Chưa cấp quyền camera');
     }
-    const opts: ImagePicker.ImagePickerOptions = {
-      mediaTypes: ['images'],
-      quality: 0.7,
-      allowsEditing: Platform.OS !== 'web',
-      aspect: [4, 3],
-    };
+    // Không dùng bộ cắt của hệ điều hành: trình chỉnh riêng của app (cắt/xoay/lật) chạy cả web lẫn điện thoại.
+    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.8 };
     const res = fromCamera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
     if (res.canceled) return;
-    // Ảnh bìa chờ lưu cũ (nếu có) không mất: chuyển xuống mục ảnh bên trong.
-    if (pendingCover) setPending((list) => [pendingCover, ...list]);
-    setPendingCover({ uri: res.assets[0].uri, mimeType: res.assets[0].mimeType });
+    setEditing({ uri: res.assets[0].uri, target: 'new-cover', aspect: '4:3' });
   };
 
   /** Bỏ ảnh bìa (không xoá ảnh khỏi quán; khi lưu sẽ tự lấy ảnh đầu tiên nếu còn). */
@@ -542,6 +571,18 @@ export default function EditPlace() {
                     <Icon name="x" size={16} color="#FFFFFF" strokeWidth={2.5} />
                   </Pressable>
                   <View style={styles.coverActions}>
+                    {pendingCover ? (
+                      <Pressable
+                        onPress={() => setEditing({ uri: pendingCover.uri, target: 'cover', aspect: '4:3' })}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cắt, xoay ảnh bìa"
+                        style={({ pressed }) => [styles.coverActionBtn, { backgroundColor: t.overlay, opacity: pressed ? 0.8 : 1 }]}>
+                        <Icon name="crop" size={16} color="#FFFFFF" />
+                        <ThemedText type="smallBold" style={styles.onPhotoText}>
+                          Chỉnh
+                        </ThemedText>
+                      </Pressable>
+                    ) : null}
                     <Pressable
                       onPress={() => pickCover()}
                       accessibilityRole="button"
@@ -591,7 +632,7 @@ export default function EditPlace() {
                   Ảnh bên trong & món ăn{galleryCount ? ` (${galleryCount})` : ''}
                 </ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Không gian, món ăn, thực đơn. Chạm vào ảnh để đặt làm ảnh bìa.
+                  Không gian, món ăn, thực đơn. Chạm ảnh để đặt làm ảnh bìa, bấm nút cắt để chỉnh ảnh mới.
                 </ThemedText>
               </View>
               <View style={styles.photosGrid}>
@@ -642,6 +683,14 @@ export default function EditPlace() {
                         Chờ lưu
                       </ThemedText>
                     </View>
+                    <Pressable
+                      onPress={() => setEditing({ uri: p.uri, target: i, aspect: 'free' })}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cắt, xoay ảnh"
+                      hitSlop={9}
+                      style={[styles.editPhotoBtn, { backgroundColor: t.overlay }]}>
+                      <Icon name="crop" size={13} color="#FFFFFF" strokeWidth={2.5} />
+                    </Pressable>
                     <Pressable
                       onPress={() => setPending(pending.filter((_, j) => j !== i))}
                       accessibilityRole="button"
@@ -1110,6 +1159,14 @@ export default function EditPlace() {
           </View>
         </View>
       </Modal>
+      <PhotoEditor
+        visible={editing != null}
+        uri={editing?.uri ?? null}
+        initialAspect={editing?.aspect ?? '4:3'}
+        title={editing?.target === 'new-cover' || editing?.target === 'cover' ? 'Chỉnh ảnh bìa' : 'Chỉnh ảnh'}
+        onCancel={() => setEditing(null)}
+        onDone={onEdited}
+      />
     </ThemedView>
   );
 }
@@ -1175,7 +1232,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  coverActions: { position: 'absolute', bottom: 10, right: 10 },
+  coverActions: { position: 'absolute', bottom: 10, right: 10, flexDirection: 'row', gap: Spacing.two },
+  editPhotoBtn: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   coverActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',

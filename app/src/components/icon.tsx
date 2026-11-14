@@ -68,6 +68,13 @@ import {
   MessageCircle,
   Square,
   SquareCheck,
+  RotateCw,
+  FlipHorizontal2,
+  ZoomIn,
+  ZoomOut,
+  Crop,
+  Undo2,
+  TriangleAlert,
   type LucideIcon,
 } from 'lucide-react-native';
 
@@ -145,6 +152,13 @@ const ICONS = {
   'message-circle': MessageCircle,
   'square': Square,
   'square-check': SquareCheck,
+  'rotate-cw': RotateCw,
+  'flip-horizontal-2': FlipHorizontal2,
+  'zoom-in': ZoomIn,
+  'zoom-out': ZoomOut,
+  crop: Crop,
+  'undo-2': Undo2,
+  'triangle-alert': TriangleAlert,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

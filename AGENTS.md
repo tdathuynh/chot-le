@@ -36,6 +36,7 @@ app/                         Expo app (SDK 58, Expo Router, TypeScript strict)
   src/lib/filters.ts         Bộ lọc dùng chung (Filters, applyFilters) + hiểu câu tiếng Việt trên máy (parseQueryLocal)
   src/lib/location.ts        Vị trí người dùng (expo-location), khoảng cách, toạ độ từ link Google Maps, directionsUrl
   src/lib/maps-link.ts       Dán link Google Maps → tự điền tên, địa chỉ, quận (đoán theo toạ độ nếu thiếu), toạ độ; địa chỉ dự phòng từ OpenStreetMap
+  src/components/photo-editor.tsx  Trình chỉnh ảnh trước khi upload: cắt theo khung (4:3/1:1/16:9/gốc), xoay, lật, nén JPEG ≤1600px (expo-image-manipulator)
   src/components/random-picker.tsx  Bảng "Hôm nay ăn gì?" (gợi ý ngẫu nhiên theo bộ lọc)
   src/components/icon.tsx    Icon đơn sắc Lucide (lucide-react-native) — KHÔNG dùng emoji; thêm icon mới vào bảng ICONS; categoryIcon() theo cột categories.icon
   src/components/places-map(.web).tsx  Bản đồ quán: Leaflet + OpenStreetMap trong WebView (điện thoại) / iframe (web); HTML ở src/lib/map-html.ts
@@ -74,7 +75,6 @@ npx eas-cli@latest deploy --prod        # đưa lên production
 
 ## Việc tiếp theo (gợi ý)
 - Gói "quán đối tác": cho chủ quán xem thống kê của quán mình (cần bảng owners + RLS theo quán).
-- Nén/resize ảnh trước khi upload (expo-image-manipulator) để tiết kiệm dung lượng Storage.
 - Bản đồ đang dùng ảnh nền OpenStreetMap miễn phí (giới hạn lượt dùng); khi đông người dùng nên chuyển sang nhà cung cấp có khóa (MapTiler, Stadia…) trong src/lib/map-html.ts.
 - Kéo-thả sắp xếp thứ tự ảnh; quản lý danh mục (thêm/sửa) ngay trong tab Quản trị.
 - Build lên store bằng EAS (`npx eas-cli@latest build`).

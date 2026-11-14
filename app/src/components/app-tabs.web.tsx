@@ -24,6 +24,9 @@ export default function AppTabs() {
           <TabTrigger name="index" href="/" asChild>
             <TabButton>Khám phá</TabButton>
           </TabTrigger>
+          <TabTrigger name="map" href="/map" asChild>
+            <TabButton>Bản đồ</TabButton>
+          </TabTrigger>
           <TabTrigger name="chat" href="/chat" asChild>
             <TabButton>Hỏi</TabButton>
           </TabTrigger>

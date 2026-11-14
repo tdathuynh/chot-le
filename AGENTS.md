@@ -16,7 +16,7 @@ supabase/schema.sql          Toàn bộ schema + RLS + storage policy + danh m�
 HUONG_DAN_SUPABASE.md        Hướng dẫn tạo project Supabase và tài khoản admin
 app/                         Expo app (SDK 58, Expo Router, TypeScript strict)
   app/AGENTS.md              Quy tắc riêng của Expo: đọc trước khi đụng API Expo
-  src/app/(tabs)/index.tsx   Trang chủ: tìm kiếm, lọc danh mục/giá/quận/đang mở, "Chọn ngẫu nhiên"
+  src/app/(tabs)/index.tsx   Tab Khám phá (danh sách); (tabs)/map.tsx: tab Bản đồ. Cả hai dùng src/components/explore-screen.tsx (tìm kiếm, lọc, "Chọn ngẫu nhiên")
   src/app/(tabs)/chat.tsx     Tab "Hỏi": chat tìm quán, chạy trên máy (src/lib/assistant.ts); sau này có thể thay bằng AI, giữ AssistantReply
   src/app/(tabs)/favorites.tsx  Quán yêu thích (lưu trên máy)
   src/app/(tabs)/admin.tsx   Đăng nhập admin + danh sách quản lý quán

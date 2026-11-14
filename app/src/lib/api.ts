@@ -169,6 +169,29 @@ export async function deletePhoto(photo: Photo) {
   if (error) throw error;
 }
 
+/** Lưu thứ tự ảnh: `orderedIds[i]` có sort_order = i (chỉ ghi ảnh đổi vị trí). */
+export async function reorderPhotos(placeId: string, orderedIds: number[]) {
+  if (isDemo) {
+    const p = demoFind(placeId);
+    const byId = new Map((p.place_photos ?? []).map((x) => [x.id, x]));
+    p.place_photos = orderedIds
+      .map((id, i) => {
+        const ph = byId.get(id);
+        return ph ? { ...ph, sort_order: i } : null;
+      })
+      .filter((x): x is Photo => x != null);
+    return;
+  }
+  const current = await supabase.from('place_photos').select('id, sort_order').eq('place_id', placeId);
+  if (current.error) throw current.error;
+  const now = new Map((current.data ?? []).map((r) => [r.id as number, r.sort_order as number]));
+  const changed = orderedIds.map((id, i) => ({ id, i })).filter(({ id, i }) => now.has(id) && now.get(id) !== i);
+  for (const { id, i } of changed) {
+    const { error } = await supabase.from('place_photos').update({ sort_order: i }).eq('id', id);
+    if (error) throw error;
+  }
+}
+
 export async function setCover(placeId: string, url: string | null) {
   if (isDemo) return void (demoFind(placeId).cover_image_url = url);
   const { error } = await supabase.from('places').update({ cover_image_url: url }).eq('id', placeId);

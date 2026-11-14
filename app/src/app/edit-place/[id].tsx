@@ -16,6 +16,7 @@ import {
 
 import { categoryIcon, Icon } from '@/components/icon';
 import { PhotoEditor, type CropAspect, type EditedPhoto } from '@/components/photo-editor';
+import { SortableGrid } from '@/components/sortable-grid';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Center, Chip, Field } from '@/components/ui';
@@ -27,6 +28,7 @@ import {
   fetchCategories,
   fetchPlace,
   savePlace,
+  reorderPhotos,
   setCover,
   uploadPhoto,
   type PlaceInput,
@@ -43,6 +45,12 @@ const WEB_SWITCH = Platform.OS === 'web' ? ({ activeThumbColor: '#FFFFFF' } as o
 
 type DishRow = { key: string; name: string; price: string; is_signature: boolean };
 type PendingPhoto = { uri: string; mimeType?: string | null };
+/** Một ô trong lưới ảnh bên trong: ảnh đã lưu trên Supabase hoặc ảnh mới chờ upload. Thứ tự mảng = thứ tự hiển thị. */
+type GalleryItem = { key: string; kind: 'saved'; photo: Photo } | { key: string; kind: 'pending'; uri: string; mimeType?: string | null };
+
+let galleryKey = 0;
+const savedItem = (photo: Photo): GalleryItem => ({ key: `s-${photo.id}`, kind: 'saved', photo });
+const pendingItem = (ph: PendingPhoto): GalleryItem => ({ key: `p-${++galleryKey}`, kind: 'pending', uri: ph.uri, mimeType: ph.mimeType });
 
 let rowKey = 0;
 const newRow = (): DishRow => ({ key: String(++rowKey), name: '', price: '', is_signature: false });
@@ -100,22 +108,23 @@ export default function EditPlace() {
   const [published, setPublishedState] = useState(true);
   const [categoryIds, setCategoryIds] = useState<number[]>([]);
   const [dishes, setDishes] = useState<DishRow[]>([newRow()]);
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [cover, setCoverUrl] = useState<string | null>(null);
-  const [pending, setPending] = useState<PendingPhoto[]>([]);
   // Ảnh bìa mới chọn từ máy (chưa upload). Có giá trị thì nó thắng `cover` khi lưu.
   const [pendingCover, setPendingCover] = useState<PendingPhoto | null>(null);
   // Trình chỉnh ảnh (cắt/xoay/lật/nén): ảnh đang chỉnh và kết quả sẽ đi đâu.
   //  'new-cover'  ảnh bìa vừa chọn/chụp (thay ảnh bìa cũ)
   //  'cover'      chỉnh lại ảnh bìa đang chờ lưu
   //  'append'     ảnh bên trong vừa chọn/chụp (thêm vào cuối)
-  //  number       chỉnh lại ảnh bên trong đang chờ lưu ở vị trí đó
+  //  string       chỉnh lại ảnh bên trong đang chờ lưu có key đó
   const [editing, setEditing] = useState<{
     uri: string;
-    target: 'new-cover' | 'cover' | 'append' | number;
+    target: 'new-cover' | 'cover' | 'append' | { key: string };
     aspect: CropAspect;
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  // Đang kéo thả ảnh → khoá cuộn trang (tránh Android cuộn tranh với thao tác kéo).
+  const [draggingPhoto, setDraggingPhoto] = useState(false);
   const [status, setStatus] = useState('');
 
   // District selector modal
@@ -215,7 +224,7 @@ export default function EditPlace() {
               }))
             : [newRow()]
         );
-        setPhotos(p.place_photos ?? []);
+        setGallery([...(p.place_photos ?? [])].sort((a, b) => a.sort_order - b.sort_order).map(savedItem));
         setCoverUrl(p.cover_image_url);
       }
       setLoaded(true);
@@ -242,6 +251,8 @@ export default function EditPlace() {
     );
   }
 
+  const savedPhotos = gallery.flatMap((x) => (x.kind === 'saved' ? [x.photo] : []));
+
   const pickPhotos = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -254,7 +265,7 @@ export default function EditPlace() {
       setEditing({ uri: res.assets[0].uri, target: 'append', aspect: 'free' });
       return;
     }
-    setPending((list) => [...list, ...res.assets.map((a) => ({ uri: a.uri, mimeType: a.mimeType }))]);
+    setGallery((list) => [...list, ...res.assets.map((a) => pendingItem({ uri: a.uri, mimeType: a.mimeType }))]);
   };
 
   const takePhoto = async () => {
@@ -272,14 +283,16 @@ export default function EditPlace() {
     const { target } = editing;
     if (target === 'new-cover') {
       // Ảnh bìa chờ lưu cũ (nếu có) không mất: chuyển xuống mục ảnh bên trong.
-      if (pendingCover) setPending((list) => [pendingCover, ...list]);
+      if (pendingCover) setGallery((list) => [pendingItem(pendingCover), ...list]);
       setPendingCover(item);
     } else if (target === 'cover') {
       setPendingCover(item);
     } else if (target === 'append') {
-      setPending((list) => [...list, item]);
+      setGallery((list) => [...list, pendingItem(item)]);
     } else {
-      setPending((list) => list.map((x, j) => (j === target ? item : x)));
+      setGallery((list) =>
+        list.map((x) => (x.key === target.key ? { ...x, kind: 'pending' as const, uri: item.uri, mimeType: item.mimeType } : x))
+      );
     }
     setEditing(null);
   };
@@ -305,23 +318,33 @@ export default function EditPlace() {
 
   /** Chạm 1 ảnh trong lưới → đặt làm ảnh bìa (áp dụng khi bấm Lưu). */
   const coverFromSaved = (url: string) => {
-    if (pendingCover) setPending((list) => [pendingCover, ...list]);
+    if (pendingCover) setGallery((list) => [pendingItem(pendingCover), ...list]);
     setPendingCover(null);
     setCoverUrl(url);
   };
-  const coverFromPending = (index: number) => {
-    const chosen = pending[index];
-    setPending((list) => [...list.filter((_, j) => j !== index), ...(pendingCover ? [pendingCover] : [])]);
-    setPendingCover(chosen);
+  const coverFromPending = (item: Extract<GalleryItem, { kind: 'pending' }>) => {
+    setGallery((list) => [...list.filter((x) => x.key !== item.key), ...(pendingCover ? [pendingItem(pendingCover)] : [])]);
+    setPendingCover({ uri: item.uri, mimeType: item.mimeType });
+  };
+
+  /** Kéo thả đổi thứ tự (áp dụng khi bấm Lưu). */
+  const moveGallery = (from: number, to: number) => {
+    setGallery((list) => {
+      if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list;
+      const next = [...list];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
   };
 
   const removeExisting = async (photo: Photo) => {
     if (!(await confirmAsync('Xóa ảnh?', 'Ảnh sẽ bị xóa vĩnh viễn.', 'Xóa'))) return;
     try {
       await deletePhoto(photo);
-      setPhotos((list) => list.filter((p) => p.id !== photo.id));
+      setGallery((list) => list.filter((x) => !(x.kind === 'saved' && x.photo.id === photo.id)));
       if (cover === photo.url) {
-        const next = photos.find((p) => p.id !== photo.id)?.url ?? null;
+        const next = savedPhotos.find((p) => p.id !== photo.id)?.url ?? null;
         await setCover(id, next);
         setCoverUrl(next);
       }
@@ -331,7 +354,7 @@ export default function EditPlace() {
   };
 
   const coverPreview = pendingCover?.uri ?? cover;
-  const galleryCount = photos.length + pending.length;
+  const galleryCount = gallery.length;
 
   const save = async () => {
     if (!name.trim() || !address.trim() || !district) {
@@ -402,14 +425,29 @@ export default function EditPlace() {
       );
 
       // Ảnh bìa mới upload trước (đứng đầu bộ ảnh), rồi tới ảnh bên trong.
-      const queue = [...(pendingCover ? [pendingCover] : []), ...pending];
+      // Thứ tự cuối: ảnh bìa mới (nếu có) đứng đầu, rồi đúng thứ tự trong lưới (đã kéo thả).
+      const finalList: GalleryItem[] = [...(pendingCover ? [pendingItem(pendingCover)] : []), ...gallery];
+      const uploadsTotal = finalList.filter((x) => x.kind === 'pending').length;
+      let uploaded = 0;
       let finalCover = pendingCover ? null : cover;
-      let firstUrl: string | null = photos[0]?.url ?? null;
-      for (let i = 0; i < queue.length; i++) {
-        setStatus(`Đang tải ảnh ${i + 1}/${queue.length}…`);
-        const ph = await uploadPhoto(placeId, queue[i].uri, queue[i].mimeType, photos.length + i);
+      let firstUrl: string | null = null;
+      const orderedIds: number[] = [];
+      for (let i = 0; i < finalList.length; i++) {
+        const it = finalList[i];
+        if (it.kind === 'saved') {
+          orderedIds.push(it.photo.id);
+          firstUrl = firstUrl ?? it.photo.url;
+          continue;
+        }
+        setStatus(`Đang tải ảnh ${++uploaded}/${uploadsTotal}…`);
+        const ph = await uploadPhoto(placeId, it.uri, it.mimeType, i);
+        orderedIds.push(ph.id);
         if (i === 0 && pendingCover) finalCover = ph.url;
         firstUrl = firstUrl ?? ph.url;
+      }
+      if (savedPhotos.length) {
+        setStatus('Đang lưu thứ tự ảnh…');
+        await reorderPhotos(placeId, orderedIds);
       }
       // Chưa chọn ảnh bìa → tự lấy ảnh đầu tiên để thẻ quán không bị trống.
       finalCover = finalCover ?? firstUrl;
@@ -432,7 +470,7 @@ export default function EditPlace() {
     )
       return;
     try {
-      await deletePlace(id, photos);
+      await deletePlace(id, savedPhotos);
       router.back();
     } catch (e) {
       notify('Không xóa được', (e as Error).message);
@@ -449,6 +487,7 @@ export default function EditPlace() {
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={!draggingPhoto}
           showsVerticalScrollIndicator={false}>
           {/* Card 1: Basic Information */}
           <View
@@ -632,92 +671,120 @@ export default function EditPlace() {
                   Ảnh bên trong & món ăn{galleryCount ? ` (${galleryCount})` : ''}
                 </ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Không gian, món ăn, thực đơn. Chạm ảnh để đặt làm ảnh bìa, bấm nút cắt để chỉnh ảnh mới.
+                  Giữ và kéo để đổi thứ tự. Chạm ảnh để đặt làm ảnh bìa, bấm nút cắt để chỉnh ảnh mới.
                 </ThemedText>
               </View>
-              <View style={styles.photosGrid}>
-                {photos.map((p) => {
-                  const isCover = !pendingCover && cover === p.url;
+              <SortableGrid
+                items={gallery}
+                onReorder={moveGallery}
+                disabled={saving}
+                onDragActiveChange={setDraggingPhoto}
+                itemAccessibilityLabel={(it, i) => `Ảnh ${i + 1}${it.kind === 'pending' ? ' (chờ lưu)' : ''}`}
+                itemActions={(it) => [
+                  {
+                    name: 'setCover',
+                    label: 'Đặt làm ảnh bìa',
+                    onAction: () => (it.kind === 'saved' ? coverFromSaved(it.photo.url) : coverFromPending(it)),
+                  },
+                  {
+                    name: 'remove',
+                    label: it.kind === 'saved' ? 'Xóa ảnh' : 'Bỏ ảnh',
+                    onAction: () =>
+                      it.kind === 'saved'
+                        ? removeExisting(it.photo)
+                        : setGallery((list) => list.filter((x) => x.key !== it.key)),
+                  },
+                ]}
+                renderItem={(it, _i, { dragging }) => {
+                  if (it.kind === 'saved') {
+                    const p = it.photo;
+                    const isCover = !pendingCover && cover === p.url;
+                    return (
+                      <View style={styles.thumbFill}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={isCover ? 'Ảnh bìa hiện tại' : 'Đặt ảnh này làm ảnh bìa'}
+                          style={styles.flex}
+                          onPress={() => coverFromSaved(p.url)}>
+                          <Image
+                            source={{ uri: p.url }}
+                            style={[styles.thumbImage, isCover && { borderColor: t.tint, borderWidth: 3 }]}
+                          />
+                        </Pressable>
+                        {isCover ? (
+                          <View style={[styles.coverTag, { backgroundColor: t.tint }]}>
+                            <ThemedText type="captionBold" style={{ color: t.tintText, fontSize: 10 }}>
+                              Ảnh bìa
+                            </ThemedText>
+                          </View>
+                        ) : null}
+                        {dragging ? null : (
+                          <Pressable
+                            onPress={() => removeExisting(p)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Xóa ảnh"
+                            hitSlop={9}
+                            style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
+                            <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
+                          </Pressable>
+                        )}
+                      </View>
+                    );
+                  }
                   return (
-                    <View key={p.id} style={styles.thumbContainer}>
+                    <View style={styles.thumbFill}>
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={isCover ? 'Ảnh bìa hiện tại' : 'Đặt ảnh này làm ảnh bìa'}
+                        accessibilityLabel="Đặt ảnh này làm ảnh bìa"
                         style={styles.flex}
-                        onPress={() => coverFromSaved(p.url)}>
-                        <Image
-                          source={{ uri: p.url }}
-                          style={[styles.thumbImage, isCover && { borderColor: t.tint, borderWidth: 3 }]}
-                        />
+                        onPress={() => coverFromPending(it)}>
+                        <Image source={{ uri: it.uri }} style={styles.thumbImage} />
                       </Pressable>
-                      {isCover ? (
-                        <View style={[styles.coverTag, { backgroundColor: t.tint }]}>
-                          <ThemedText type="captionBold" style={{ color: t.tintText, fontSize: 10 }}>
-                            Ảnh bìa
-                          </ThemedText>
-                        </View>
-                      ) : null}
-                      <Pressable
-                        onPress={() => removeExisting(p)}
-                        accessibilityRole="button"
-                        accessibilityLabel="Xóa ảnh"
-                        hitSlop={9}
-                        style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
-                        <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
-                      </Pressable>
+                      <View style={[styles.pendingTag, { backgroundColor: t.overlay }]}>
+                        <ThemedText type="captionBold" style={[styles.onPhotoText, { fontSize: 10 }]}>
+                          Chờ lưu
+                        </ThemedText>
+                      </View>
+                      {dragging ? null : (
+                        <>
+                          <Pressable
+                            onPress={() => setEditing({ uri: it.uri, target: { key: it.key }, aspect: 'free' })}
+                            accessibilityRole="button"
+                            accessibilityLabel="Cắt, xoay ảnh"
+                            hitSlop={9}
+                            style={[styles.editPhotoBtn, { backgroundColor: t.overlay }]}>
+                            <Icon name="crop" size={13} color="#FFFFFF" strokeWidth={2.5} />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => setGallery((list) => list.filter((x) => x.key !== it.key))}
+                            accessibilityRole="button"
+                            accessibilityLabel="Bỏ ảnh"
+                            hitSlop={9}
+                            style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
+                            <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
+                          </Pressable>
+                        </>
+                      )}
                     </View>
                   );
-                })}
-
-                {pending.map((p, i) => (
-                  <View key={p.uri} style={styles.thumbContainer}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Đặt ảnh này làm ảnh bìa"
-                      style={styles.flex}
-                      onPress={() => coverFromPending(i)}>
-                      <Image source={{ uri: p.uri }} style={styles.thumbImage} />
-                    </Pressable>
-                    <View style={[styles.pendingTag, { backgroundColor: t.overlay }]}>
-                      <ThemedText type="captionBold" style={[styles.onPhotoText, { fontSize: 10 }]}>
-                        Chờ lưu
-                      </ThemedText>
-                    </View>
-                    <Pressable
-                      onPress={() => setEditing({ uri: p.uri, target: i, aspect: 'free' })}
-                      accessibilityRole="button"
-                      accessibilityLabel="Cắt, xoay ảnh"
-                      hitSlop={9}
-                      style={[styles.editPhotoBtn, { backgroundColor: t.overlay }]}>
-                      <Icon name="crop" size={13} color="#FFFFFF" strokeWidth={2.5} />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setPending(pending.filter((_, j) => j !== i))}
-                      accessibilityRole="button"
-                      accessibilityLabel="Bỏ ảnh"
-                      hitSlop={9}
-                      style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
-                      <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
-                    </Pressable>
-                  </View>
-                ))}
-
-                {/* Ô thêm ảnh */}
-                <Pressable
-                  onPress={pickPhotos}
-                  accessibilityRole="button"
-                  accessibilityLabel="Thêm ảnh bên trong"
-                  style={({ pressed }) => [
-                    styles.thumbContainer,
-                    styles.addTile,
-                    { borderColor: t.border, backgroundColor: t.backgroundElement, opacity: pressed ? 0.8 : 1 },
-                  ]}>
-                  <Icon name="plus" size={22} themeColor="textSecondary" />
-                  <ThemedText type="captionBold" themeColor="textSecondary">
-                    Thêm ảnh
-                  </ThemedText>
-                </Pressable>
-              </View>
+                }}
+                trailing={
+                  <Pressable
+                    onPress={pickPhotos}
+                    accessibilityRole="button"
+                    accessibilityLabel="Thêm ảnh bên trong"
+                    style={({ pressed }) => [
+                      styles.thumbFill,
+                      styles.addTile,
+                      { borderColor: t.border, backgroundColor: t.backgroundElement, opacity: pressed ? 0.8 : 1 },
+                    ]}>
+                    <Icon name="plus" size={22} themeColor="textSecondary" />
+                    <ThemedText type="captionBold" themeColor="textSecondary">
+                      Thêm ảnh
+                    </ThemedText>
+                  </Pressable>
+                }
+              />
               {Platform.OS !== 'web' ? (
                 <Button
                   title="Chụp ảnh bên trong"
@@ -1272,6 +1339,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
+  thumbFill: { width: '100%', height: '100%', borderRadius: Radii.md, overflow: 'hidden' },
   thumbContainer: {
     position: 'relative',
     width: 96,

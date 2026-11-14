@@ -1,5 +1,5 @@
 -- =====================================================================
---  Ăn Gì HCM — Supabase schema
+--  Chốt Lẹ — Supabase schema
 --  Chạy toàn bộ file này 1 lần trong Supabase Dashboard → SQL Editor.
 --  Người dùng (anon) chỉ ĐỌC quán đang hiển thị; chỉ admin được GHI.
 -- =====================================================================

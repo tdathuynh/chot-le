@@ -46,7 +46,7 @@ function place(
 export const demoPlaces: PlaceWithRelations[] = [
   place({
     id: 'demo-pho',
-    deal_title: 'Tặng 1 phần quẩy khi đưa app Ăn Gì HCM',
+    deal_title: 'Tặng 1 phần quẩy khi đưa app Chốt Lẹ',
     amenities: ['giu-xe', 'the'],
     latitude: 10.7769,
     longitude: 106.7009,

@@ -25,7 +25,7 @@ export default function RootLayout() {
             headerTitleStyle: { color: colors.text, fontWeight: '700' },
             contentStyle: { backgroundColor: colors.background },
           }}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Ăn Gì HCM' }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Chốt Lẹ' }} />
           <Stack.Screen name="place/[id]" options={{ headerShown: false, title: 'Chi tiết quán' }} />
           <Stack.Screen name="edit-place/[id]" options={{ headerShown: true, title: 'Thông tin quán' }} />
           <Stack.Screen name="vote/new" options={{ headerShown: true, title: 'Rủ hội bạn chọn quán' }} />

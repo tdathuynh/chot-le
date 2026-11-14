@@ -141,7 +141,7 @@ type NominatimResult = {
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
 // Nominatim yêu cầu định danh ứng dụng (trình duyệt tự gửi Referer, không cho đặt User-Agent).
-const NOMINATIM_INIT = Platform.OS === 'web' ? undefined : { headers: { 'User-Agent': 'AnGiHCM/1.0 (Expo app)' } };
+const NOMINATIM_INIT = Platform.OS === 'web' ? undefined : { headers: { 'User-Agent': 'ChotLe/1.0 (Expo app)' } };
 
 async function reverseGeocode(c: Coords): Promise<{ name?: string; address: string; openingHours?: string } | null> {
   try {

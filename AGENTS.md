@@ -1,6 +1,6 @@
-# Ăn Gì HCM — hướng dẫn cho AI coding agent (Codex, Claude…)
+# Chốt Lẹ — hướng dẫn cho AI coding agent (Codex, Claude…)
 
-App gợi ý quán ăn ngon ở TP.HCM. **Admin** nhập quán (ảnh, giá, địa chỉ, món) qua web hoặc điện thoại; **người dùng** chỉ xem, không cần đăng nhập.
+App gợi ý quán ăn ngon ở TP.HCM (tên cũ: Ăn Gì HCM; khẩu hiệu "Đi ăn hông? Chốt lẹ!"). **Admin** nhập quán (ảnh, giá, địa chỉ, món) qua web hoặc điện thoại; **người dùng** chỉ xem, không cần đăng nhập.
 Giao diện và nội dung hiển thị viết bằng **tiếng Việt**.
 
 ## Kiến trúc
@@ -32,7 +32,7 @@ app/                         Expo app (SDK 58, Expo Router, TypeScript strict)
   src/lib/format.ts          Định dạng giá (65k), giờ, isOpenNow, normalize (bỏ dấu để tìm kiếm)
   src/lib/favorites.ts       Yêu thích lưu local (useSyncExternalStore)
   src/lib/device.ts          Mã máy ngẫu nhiên (getDeviceId) + tên hiển thị khi bình chọn; KHÔNG phải tài khoản
-  src/lib/share-link.ts      Link chia sẻ bình chọn (web origin / EXPO_PUBLIC_WEB_URL / deep link angihcm://)
+  src/lib/share-link.ts      Link chia sẻ bình chọn (web origin / EXPO_PUBLIC_WEB_URL / deep link chotle://)
   src/lib/filters.ts         Bộ lọc dùng chung (Filters, applyFilters) + hiểu câu tiếng Việt trên máy (parseQueryLocal)
   src/lib/location.ts        Vị trí người dùng (expo-location), khoảng cách, toạ độ từ link Google Maps, directionsUrl
   src/lib/maps-link.ts       Dán link Google Maps → tự điền tên, địa chỉ, quận (đoán theo toạ độ nếu thiếu), toạ độ; địa chỉ dự phòng từ OpenStreetMap
@@ -65,8 +65,14 @@ npx eslint src       # lint: phải sạch trước khi xong việc
 ```
 (`npx expo lint` hiện báo lỗi phiên bản ESLint; dùng `npx eslint src`.)
 
+**Deploy bản web** (EAS Hosting, project `an-gi-hcm` của tài khoản Expo chủ dự án, tên miền https://chot-le.expo.app):
+```bash
+npx expo export --platform web          # tạo dist/ (đọc EXPO_PUBLIC_* từ app/.env, gồm EXPO_PUBLIC_WEB_URL)
+npx eas-cli@latest deploy --prod        # đưa lên production
+```
+Ổ C máy chủ dự án gần đầy: nếu cài/xuất lỗi, đặt `TEMP`/`TMP` và `npm_config_cache` sang ổ D.
+
 ## Việc tiếp theo (gợi ý)
-- Deploy bản web (EAS Hosting/Vercel) và đặt `EXPO_PUBLIC_WEB_URL` để link bình chọn mở được với người chưa cài app.
 - Gói "quán đối tác": cho chủ quán xem thống kê của quán mình (cần bảng owners + RLS theo quán).
 - Nén/resize ảnh trước khi upload (expo-image-manipulator) để tiết kiệm dung lượng Storage.
 - Bản đồ đang dùng ảnh nền OpenStreetMap miễn phí (giới hạn lượt dùng); khi đông người dùng nên chuyển sang nhà cung cấp có khóa (MapTiler, Stadia…) trong src/lib/map-html.ts.

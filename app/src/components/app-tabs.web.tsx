@@ -84,7 +84,7 @@ export function CustomTabList(props: TabListProps) {
         <View style={[styles.brandRow, compact && { paddingLeft: 6 }]}>
           <Icon name="utensils-crossed" size={20} color={t.tint} />
           {!compact && <ThemedText type="defaultBold" style={{ color: t.tint }}>
-            Ăn Gì HCM
+            Chốt Lẹ
           </ThemedText>}
         </View>
 

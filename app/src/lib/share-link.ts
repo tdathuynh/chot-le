@@ -47,12 +47,12 @@ export type ShareResult = 'shared' | 'copied' | 'cancelled' | 'failed';
 export async function sharePoll(id: string, title: string): Promise<ShareResult> {
   const url = pollUrl(id);
   const name = title.trim() || 'Đi ăn gì đây?';
-  const message = `Bình chọn quán: ${name}\nBấm để chọn: ${url}`;
+  const message = `Đi ăn hông? Chốt lẹ: ${name}\nBấm để bình chọn quán: ${url}`;
 
   if (Platform.OS === 'web') {
     if (canNativeShare()) {
       try {
-        await navigator.share({ title: `Bình chọn quán: ${name}`, text: `Bình chọn quán: ${name}`, url });
+        await navigator.share({ title: `Chốt Lẹ: ${name}`, text: `Đi ăn hông? Chốt lẹ: ${name}`, url });
         return 'shared';
       } catch (e) {
         if (isCancel(e)) return 'cancelled';
@@ -64,7 +64,7 @@ export async function sharePoll(id: string, title: string): Promise<ShareResult>
 
   try {
     const r = await Share.share(
-      Platform.OS === 'ios' ? { message: `Bình chọn quán: ${name}`, url } : { message, title: name },
+      Platform.OS === 'ios' ? { message: `Đi ăn hông? Chốt lẹ: ${name}`, url } : { message, title: name },
       { dialogTitle: 'Gửi link cho bạn bè' }
     );
     return r.action === Share.dismissedAction ? 'cancelled' : 'shared';

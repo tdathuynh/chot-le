@@ -102,6 +102,8 @@ export default function EditPlace() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [cover, setCoverUrl] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPhoto[]>([]);
+  // Ảnh bìa mới chọn từ máy (chưa upload). Có giá trị thì nó thắng `cover` khi lưu.
+  const [pendingCover, setPendingCover] = useState<PendingPhoto | null>(null);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -247,6 +249,43 @@ export default function EditPlace() {
     setPending((list) => [...list, { uri: res.assets[0].uri, mimeType: res.assets[0].mimeType }]);
   };
 
+  /** Chọn/đổi ảnh bìa: 1 ảnh, cắt khung ngang cho đẹp trên thẻ quán. */
+  const pickCover = async (fromCamera = false) => {
+    if (fromCamera) {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return notify('Chưa cấp quyền camera');
+    }
+    const opts: ImagePicker.ImagePickerOptions = {
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsEditing: Platform.OS !== 'web',
+      aspect: [4, 3],
+    };
+    const res = fromCamera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
+    if (res.canceled) return;
+    // Ảnh bìa chờ lưu cũ (nếu có) không mất: chuyển xuống mục ảnh bên trong.
+    if (pendingCover) setPending((list) => [pendingCover, ...list]);
+    setPendingCover({ uri: res.assets[0].uri, mimeType: res.assets[0].mimeType });
+  };
+
+  /** Bỏ ảnh bìa (không xoá ảnh khỏi quán; khi lưu sẽ tự lấy ảnh đầu tiên nếu còn). */
+  const clearCover = () => {
+    if (pendingCover) setPendingCover(null);
+    else setCoverUrl(null);
+  };
+
+  /** Chạm 1 ảnh trong lưới → đặt làm ảnh bìa (áp dụng khi bấm Lưu). */
+  const coverFromSaved = (url: string) => {
+    if (pendingCover) setPending((list) => [pendingCover, ...list]);
+    setPendingCover(null);
+    setCoverUrl(url);
+  };
+  const coverFromPending = (index: number) => {
+    const chosen = pending[index];
+    setPending((list) => [...list.filter((_, j) => j !== index), ...(pendingCover ? [pendingCover] : [])]);
+    setPendingCover(chosen);
+  };
+
   const removeExisting = async (photo: Photo) => {
     if (!(await confirmAsync('Xóa ảnh?', 'Ảnh sẽ bị xóa vĩnh viễn.', 'Xóa'))) return;
     try {
@@ -262,15 +301,8 @@ export default function EditPlace() {
     }
   };
 
-  const makeCover = async (url: string) => {
-    if (isNew) return;
-    try {
-      await setCover(id, url);
-      setCoverUrl(url);
-    } catch (e) {
-      notify('Lỗi', (e as Error).message);
-    }
-  };
+  const coverPreview = pendingCover?.uri ?? cover;
+  const galleryCount = photos.length + pending.length;
 
   const save = async () => {
     if (!name.trim() || !address.trim() || !district) {
@@ -323,7 +355,7 @@ export default function EditPlace() {
       deal_until: deal ? until : null,
       phone: phone.trim() || null,
       google_maps_url: mapsUrl.trim() || null,
-      cover_image_url: cover,
+      cover_image_url: pendingCover ? null : cover,
       is_featured: featured,
       is_published: published,
     };
@@ -340,13 +372,19 @@ export default function EditPlace() {
           .map((d, i) => ({ name: d.name.trim(), price: parsePrice(d.price), is_signature: d.is_signature, sort_order: i }))
       );
 
-      let firstUrl = cover;
-      for (let i = 0; i < pending.length; i++) {
-        setStatus(`Đang tải ảnh ${i + 1}/${pending.length}…`);
-        const ph = await uploadPhoto(placeId, pending[i].uri, pending[i].mimeType, photos.length + i);
+      // Ảnh bìa mới upload trước (đứng đầu bộ ảnh), rồi tới ảnh bên trong.
+      const queue = [...(pendingCover ? [pendingCover] : []), ...pending];
+      let finalCover = pendingCover ? null : cover;
+      let firstUrl: string | null = photos[0]?.url ?? null;
+      for (let i = 0; i < queue.length; i++) {
+        setStatus(`Đang tải ảnh ${i + 1}/${queue.length}…`);
+        const ph = await uploadPhoto(placeId, queue[i].uri, queue[i].mimeType, photos.length + i);
+        if (i === 0 && pendingCover) finalCover = ph.url;
         firstUrl = firstUrl ?? ph.url;
       }
-      if (!cover && firstUrl) await setCover(placeId, firstUrl);
+      // Chưa chọn ảnh bìa → tự lấy ảnh đầu tiên để thẻ quán không bị trống.
+      finalCover = finalCover ?? firstUrl;
+      if (finalCover !== input.cover_image_url) await setCover(placeId, finalCover);
 
       setStatus('');
       notify('Đã lưu quán');
@@ -460,6 +498,186 @@ export default function EditPlace() {
                 </ThemedText>
                 <Icon name="chevron-down" size={18} themeColor="textSecondary" />
               </Pressable>
+            </View>
+          </View>
+
+          {/* Card: Ảnh quán (ảnh bìa + ảnh bên trong) */}
+          <View
+            style={[
+              styles.formCard,
+              {
+                backgroundColor: t.card,
+                borderColor: t.cardBorder,
+              },
+              Shadows.soft,
+            ]}>
+            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardHeader}>
+              ẢNH QUÁN
+            </ThemedText>
+
+            {/* Ảnh bìa */}
+            <View style={styles.photoBlock}>
+              <View style={styles.photoBlockHead}>
+                <ThemedText type="defaultBold">Ảnh bìa</ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Hiện trên thẻ quán và đầu trang chi tiết
+                </ThemedText>
+              </View>
+              {coverPreview ? (
+                <View style={styles.coverBox}>
+                  <Image source={{ uri: coverPreview }} style={styles.coverImage} contentFit="cover" transition={150} />
+                  {pendingCover ? (
+                    <View style={[styles.coverBadge, { backgroundColor: t.overlay }]}>
+                      <ThemedText type="captionBold" style={styles.onPhotoText}>
+                        Chờ lưu
+                      </ThemedText>
+                    </View>
+                  ) : null}
+                  <Pressable
+                    onPress={clearCover}
+                    accessibilityRole="button"
+                    accessibilityLabel="Bỏ ảnh bìa"
+                    hitSlop={8}
+                    style={[styles.coverRemove, { backgroundColor: t.overlay }]}>
+                    <Icon name="x" size={16} color="#FFFFFF" strokeWidth={2.5} />
+                  </Pressable>
+                  <View style={styles.coverActions}>
+                    <Pressable
+                      onPress={() => pickCover()}
+                      accessibilityRole="button"
+                      style={({ pressed }) => [styles.coverActionBtn, { backgroundColor: t.overlay, opacity: pressed ? 0.8 : 1 }]}>
+                      <Icon name="images" size={16} color="#FFFFFF" />
+                      <ThemedText type="smallBold" style={styles.onPhotoText}>
+                        Đổi ảnh bìa
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => pickCover()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Thêm ảnh bìa"
+                  style={({ pressed }) => [
+                    styles.coverEmpty,
+                    { borderColor: t.tint, backgroundColor: t.tintSubtle, opacity: pressed ? 0.8 : 1 },
+                  ]}>
+                  <View style={[styles.coverEmptyIcon, { backgroundColor: t.tint }]}>
+                    <Icon name="camera" size={22} color={t.tintText} />
+                  </View>
+                  <ThemedText type="defaultBold" style={{ color: t.tint }}>
+                    Thêm ảnh bìa
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary" style={styles.centerText}>
+                    Nên dùng ảnh món đặc trưng hoặc mặt tiền quán, chụp ngang, đủ sáng
+                  </ThemedText>
+                </Pressable>
+              )}
+              {Platform.OS !== 'web' ? (
+                <Button
+                  title="Chụp ảnh bìa"
+                  icon={<Icon name="camera" size={18} />}
+                  variant="secondary"
+                  size="md"
+                  onPress={() => pickCover(true)}
+                />
+              ) : null}
+            </View>
+
+            {/* Ảnh bên trong */}
+            <View style={[styles.photoBlock, styles.photoBlockDivider, { borderTopColor: t.border }]}>
+              <View style={styles.photoBlockHead}>
+                <ThemedText type="defaultBold">
+                  Ảnh bên trong & món ăn{galleryCount ? ` (${galleryCount})` : ''}
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Không gian, món ăn, thực đơn. Chạm vào ảnh để đặt làm ảnh bìa.
+                </ThemedText>
+              </View>
+              <View style={styles.photosGrid}>
+                {photos.map((p) => {
+                  const isCover = !pendingCover && cover === p.url;
+                  return (
+                    <View key={p.id} style={styles.thumbContainer}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={isCover ? 'Ảnh bìa hiện tại' : 'Đặt ảnh này làm ảnh bìa'}
+                        style={styles.flex}
+                        onPress={() => coverFromSaved(p.url)}>
+                        <Image
+                          source={{ uri: p.url }}
+                          style={[styles.thumbImage, isCover && { borderColor: t.tint, borderWidth: 3 }]}
+                        />
+                      </Pressable>
+                      {isCover ? (
+                        <View style={[styles.coverTag, { backgroundColor: t.tint }]}>
+                          <ThemedText type="captionBold" style={{ color: t.tintText, fontSize: 10 }}>
+                            Ảnh bìa
+                          </ThemedText>
+                        </View>
+                      ) : null}
+                      <Pressable
+                        onPress={() => removeExisting(p)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Xóa ảnh"
+                        hitSlop={9}
+                        style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
+                        <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+
+                {pending.map((p, i) => (
+                  <View key={p.uri} style={styles.thumbContainer}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Đặt ảnh này làm ảnh bìa"
+                      style={styles.flex}
+                      onPress={() => coverFromPending(i)}>
+                      <Image source={{ uri: p.uri }} style={styles.thumbImage} />
+                    </Pressable>
+                    <View style={[styles.pendingTag, { backgroundColor: t.overlay }]}>
+                      <ThemedText type="captionBold" style={[styles.onPhotoText, { fontSize: 10 }]}>
+                        Chờ lưu
+                      </ThemedText>
+                    </View>
+                    <Pressable
+                      onPress={() => setPending(pending.filter((_, j) => j !== i))}
+                      accessibilityRole="button"
+                      accessibilityLabel="Bỏ ảnh"
+                      hitSlop={9}
+                      style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
+                      <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
+                    </Pressable>
+                  </View>
+                ))}
+
+                {/* Ô thêm ảnh */}
+                <Pressable
+                  onPress={pickPhotos}
+                  accessibilityRole="button"
+                  accessibilityLabel="Thêm ảnh bên trong"
+                  style={({ pressed }) => [
+                    styles.thumbContainer,
+                    styles.addTile,
+                    { borderColor: t.border, backgroundColor: t.backgroundElement, opacity: pressed ? 0.8 : 1 },
+                  ]}>
+                  <Icon name="plus" size={22} themeColor="textSecondary" />
+                  <ThemedText type="captionBold" themeColor="textSecondary">
+                    Thêm ảnh
+                  </ThemedText>
+                </Pressable>
+              </View>
+              {Platform.OS !== 'web' ? (
+                <Button
+                  title="Chụp ảnh bên trong"
+                  icon={<Icon name="camera" size={18} />}
+                  variant="secondary"
+                  size="md"
+                  onPress={takePhoto}
+                />
+              ) : null}
             </View>
           </View>
 
@@ -624,98 +842,6 @@ export default function EditPlace() {
                   keyboardType="numbers-and-punctuation"
                 />
               </View>
-            </View>
-          </View>
-
-          {/* Card 4: Photos Management */}
-          <View
-            style={[
-              styles.formCard,
-              {
-                backgroundColor: t.card,
-                borderColor: t.cardBorder,
-              },
-              Shadows.soft,
-            ]}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardHeader}>
-              HÌNH ẢNH QUÁN ĂN
-            </ThemedText>
-            <ThemedText type="caption" themeColor="textSecondary">
-              Chạm vào ảnh đã lưu để đặt làm ảnh bìa. Bấm dấu X để xóa ảnh.
-            </ThemedText>
-
-            <View style={styles.photosGrid}>
-              {photos.map((p) => {
-                const isCover = cover === p.url;
-                return (
-                  <View key={p.id} style={styles.thumbContainer}>
-                    <Pressable accessibilityRole="button" accessibilityLabel="Đặt ảnh làm ảnh bìa" style={styles.flex} onPress={() => makeCover(p.url)}>
-                      <Image
-                        source={{ uri: p.url }}
-                        style={[
-                          styles.thumbImage,
-                          isCover && { borderColor: t.tint, borderWidth: 3 },
-                        ]}
-                      />
-                    </Pressable>
-                    {isCover ? (
-                      <View style={[styles.coverTag, { backgroundColor: t.tint }]}>
-                        <ThemedText type="captionBold" style={{ color: t.tintText, fontSize: 10 }}>
-                          Ảnh bìa
-                        </ThemedText>
-                      </View>
-                    ) : null}
-                    <Pressable
-                      onPress={() => removeExisting(p)}
-                      accessibilityRole="button"
-                    accessibilityLabel="Xóa ảnh"
-                    hitSlop={9}
-                    style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
-                      <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
-                    </Pressable>
-                  </View>
-                );
-              })}
-
-              {pending.map((p, i) => (
-                <View key={p.uri} style={styles.thumbContainer}>
-                  <Image source={{ uri: p.uri }} style={[styles.thumbImage, { opacity: 0.75 }]} />
-                  <View style={[styles.pendingTag, { backgroundColor: t.backgroundElement }]}>
-                    <ThemedText type="captionBold" style={{ color: t.textSecondary, fontSize: 10 }}>
-                      Chờ lưu
-                    </ThemedText>
-                  </View>
-                  <Pressable
-                    onPress={() => setPending(pending.filter((_, j) => j !== i))}
-                    accessibilityRole="button"
-                    accessibilityLabel="Xóa ảnh"
-                    hitSlop={9}
-                    style={[styles.removePhotoBtn, { backgroundColor: t.overlay }]}>
-                    <Icon name="x" size={13} color="#FFFFFF" strokeWidth={2.5} />
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.row}>
-              <Button
-                title="Chọn ảnh"
-                icon={<Icon name="images" size={18} />}
-                variant="secondary"
-                size="md"
-                style={styles.flex}
-                onPress={pickPhotos}
-              />
-              {Platform.OS !== 'web' ? (
-                <Button
-                  title="Chụp ảnh"
-                  icon={<Icon name="camera" size={18} />}
-                  variant="secondary"
-                  size="md"
-                  style={styles.flex}
-                  onPress={takePhoto}
-                />
-              ) : null}
             </View>
           </View>
 
@@ -1033,6 +1159,47 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     alignItems: 'center',
   },
+  photoBlock: { gap: Spacing.two + 2 },
+  photoBlockDivider: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.three },
+  photoBlockHead: { gap: 2 },
+  coverBox: { width: '100%', aspectRatio: 4 / 3, maxHeight: 320, borderRadius: Radii.lg, overflow: 'hidden' },
+  coverImage: { width: '100%', height: '100%' },
+  coverBadge: { position: 'absolute', top: 10, left: 10, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.sm },
+  coverRemove: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverActions: { position: 'absolute', bottom: 10, right: 10 },
+  coverActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radii.full,
+  },
+  coverEmpty: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    maxHeight: 260,
+    borderRadius: Radii.lg,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one + 2,
+    paddingHorizontal: Spacing.four,
+  },
+  coverEmptyIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  centerText: { textAlign: 'center' },
+  onPhotoText: { color: '#FFFFFF' },
+  addTile: { borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
   photosGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

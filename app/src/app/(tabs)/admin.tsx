@@ -199,7 +199,7 @@ function LoginForm() {
           label="Email quản trị"
           value={email}
           onChangeText={setEmail}
-          placeholder="admin@angi.hcm"
+          placeholder="admin@chotle.vn"
           autoCapitalize="none"
           keyboardType="email-address"
           autoComplete="email"

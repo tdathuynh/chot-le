@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -32,7 +32,7 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { confirmAsync, notify } from '@/lib/confirm';
-import { formatPrice, parsePrice, parseTime, shortTime } from '@/lib/format';
+import { formatDate, formatPrice, parsePrice, parseTime, shortTime } from '@/lib/format';
 import { coordsFromMapsUrl, parseCoords, requestLocation } from '@/lib/location';
 import { importFromMapsLink, isMapsLink } from '@/lib/maps-link';
 import { AMENITIES, DISTRICTS, OCCASIONS, type Category, type Photo } from '@/lib/types';
@@ -46,16 +46,39 @@ type PendingPhoto = { uri: string; mimeType?: string | null };
 let rowKey = 0;
 const newRow = (): DishRow => ({ key: String(++rowKey), name: '', price: '', is_signature: false });
 
+/** "31/12/2026", "1/2/26", "31-12-2026" hoặc "2026-12-31" → "2026-12-31"; sai/không có thật → null. */
+function parseDateInput(s: string): string | null {
+  const v = s.trim();
+  let y: number, m: number, d: number;
+  const iso = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const vn = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
+  if (iso) [y, m, d] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  else if (vn) [d, m, y] = [Number(vn[1]), Number(vn[2]), Number(vn[3].length === 2 ? `20${vn[3]}` : vn[3])];
+  else return null;
+  const dt = new Date(y, m - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+const todayIso = () => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+};
+
 export default function EditPlace() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // Từ góp ý của người dùng: /edit-place/new?maps=<link Google Maps>&name=<tên quán>
+  const params = useLocalSearchParams<{ id: string; maps?: string; name?: string }>();
+  const id = params.id;
   const isNew = id === 'new';
+  const mapsParam = isNew && typeof params.maps === 'string' ? params.maps.trim() : '';
+  const nameParam = isNew && typeof params.name === 'string' ? params.name.trim() : '';
   const t = useTheme();
   const { isAdmin } = useAuth();
 
   const [loaded, setLoaded] = useState(isNew);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  const [name, setName] = useState('');
+  const [name, setName] = useState(nameParam);
   const [address, setAddress] = useState('');
   const [district, setDistrict] = useState('');
   const [priceMin, setPriceMin] = useState('');
@@ -63,13 +86,15 @@ export default function EditPlace() {
   const [openTime, setOpenTime] = useState('');
   const [closeTime, setCloseTime] = useState('');
   const [phone, setPhone] = useState('');
-  const [mapsUrl, setMapsUrl] = useState('');
+  const [mapsUrl, setMapsUrl] = useState(mapsParam);
   const [coordsText, setCoordsText] = useState('');
   const [locating, setLocating] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [occasions, setOccasions] = useState<string[]>([]);
   const [amenities, setAmenities] = useState<string[]>([]);
   const [description, setDescription] = useState('');
+  const [dealTitle, setDealTitle] = useState('');
+  const [dealUntil, setDealUntil] = useState('');
   const [featured, setFeatured] = useState(false);
   const [published, setPublishedState] = useState(true);
   const [categoryIds, setCategoryIds] = useState<number[]>([]);
@@ -131,6 +156,18 @@ export default function EditPlace() {
     }
   }
 
+  // Mở từ góp ý có kèm link → tự đọc link một lần khi vào màn hình.
+  const autoImported = useRef(false);
+  const autoImport = useEffectEvent((link: string) => {
+    if (isMapsLink(link)) runImport(link);
+  });
+  useEffect(() => {
+    if (!mapsParam || autoImported.current) return;
+    autoImported.current = true;
+    // Chạy sau khi effect xong (runImport đổi state), tránh setState đồng bộ trong effect.
+    Promise.resolve().then(() => autoImport(mapsParam));
+  }, [mapsParam]);
+
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {});
     if (isNew) return;
@@ -150,6 +187,8 @@ export default function EditPlace() {
         setOccasions(p.occasions ?? []);
         setAmenities(p.amenities ?? []);
         setDescription(p.description ?? '');
+        setDealTitle(p.deal_title ?? '');
+        setDealUntil(formatDate(p.deal_until));
         setFeatured(p.is_featured);
         setPublishedState(p.is_published);
         setCategoryIds(p.place_categories.map((c) => c.category_id));
@@ -249,6 +288,24 @@ export default function EditPlace() {
       return notify('Toạ độ không hợp lệ', 'Nhập dạng 10.7769, 106.7009 hoặc dán link Google Maps có toạ độ.');
     }
 
+    // Ưu đãi: hạn để trống = không thời hạn.
+    const deal = dealTitle.trim();
+    const until = dealUntil.trim() ? parseDateInput(dealUntil) : null;
+    if (dealUntil.trim() && !until) {
+      return notify('Hạn ưu đãi không hợp lệ', 'Nhập ngày dạng 31/12/2026, hoặc để trống nếu không có thời hạn.');
+    }
+    if (until && !deal) {
+      return notify('Thiếu nội dung ưu đãi', 'Đã nhập hạn nhưng chưa nhập nội dung ưu đãi. Nhập nội dung hoặc xóa hạn.');
+    }
+    if (deal && until && until < todayIso()) {
+      const ok = await confirmAsync(
+        'Ưu đãi đã hết hạn',
+        `Hạn ${formatDate(until)} đã qua nên ưu đãi sẽ không hiện cho người dùng. Vẫn lưu?`,
+        'Vẫn lưu'
+      );
+      if (!ok) return;
+    }
+
     const input: PlaceInput = {
       name: name.trim(),
       address: address.trim(),
@@ -262,6 +319,8 @@ export default function EditPlace() {
       open_time: ot,
       close_time: ct,
       description: description.trim() || null,
+      deal_title: deal || null,
+      deal_until: deal ? until : null,
       phone: phone.trim() || null,
       google_maps_url: mapsUrl.trim() || null,
       cover_image_url: cover,
@@ -481,6 +540,36 @@ export default function EditPlace() {
                 );
               })}
             </View>
+          </View>
+
+          {/* Ưu đãi độc quyền cho khách dùng app */}
+          <View style={[styles.formCard, { backgroundColor: t.card, borderColor: t.cardBorder }, Shadows.soft]}>
+            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardHeader}>
+              ƯU ĐÃI CHO KHÁCH DÙNG APP
+            </ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              Hiện thành nhãn “Ưu đãi” trên thẻ quán và trang chi tiết; khách lọc được “Có ưu đãi”. Dùng khi chào hợp tác
+              với quán. Để trống nếu quán chưa có ưu đãi.
+            </ThemedText>
+            <Field
+              label="Nội dung ưu đãi"
+              value={dealTitle}
+              onChangeText={setDealTitle}
+              placeholder="Vd: Giảm 10% hóa đơn khi đưa app"
+              maxLength={80}
+              icon={<Icon name="gift" size={18} themeColor="textSecondary" />}
+            />
+            <Field
+              label="Hạn ưu đãi (không bắt buộc)"
+              value={dealUntil}
+              onChangeText={setDealUntil}
+              placeholder="31/12/2026"
+              keyboardType="numbers-and-punctuation"
+              autoCorrect={false}
+              maxLength={10}
+              icon={<Icon name="hourglass" size={18} themeColor="textSecondary" />}
+              hint="Ngày/tháng/năm. Qua ngày này ưu đãi tự ẩn; để trống là không thời hạn."
+            />
           </View>
 
           {/* Card 3: Price & Operating Hours */}

@@ -56,6 +56,18 @@ import {
   Wifi,
   Wine,
   X,
+  Crown,
+  Gift,
+  Link,
+  Lightbulb,
+  ChartColumn,
+  TrendingUp,
+  Vote,
+  Copy,
+  Trophy,
+  MessageCircle,
+  Square,
+  SquareCheck,
   type LucideIcon,
 } from 'lucide-react-native';
 
@@ -121,6 +133,18 @@ const ICONS = {
   wifi: Wifi,
   wine: Wine,
   x: X,
+  'crown': Crown,
+  'gift': Gift,
+  'link': Link,
+  'lightbulb': Lightbulb,
+  'chart-column': ChartColumn,
+  'trending-up': TrendingUp,
+  'vote': Vote,
+  'copy': Copy,
+  'trophy': Trophy,
+  'message-circle': MessageCircle,
+  'square': Square,
+  'square-check': SquareCheck,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

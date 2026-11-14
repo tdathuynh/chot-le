@@ -20,13 +20,19 @@ let photoId = 1;
 let dishId = 1;
 
 function place(
-  p: Omit<PlaceWithRelations, 'created_at' | 'updated_at' | 'place_photos' | 'dishes' | 'cover_image_url' | 'is_published'> & {
+  p: Omit<
+    PlaceWithRelations,
+    'created_at' | 'updated_at' | 'place_photos' | 'dishes' | 'cover_image_url' | 'is_published' | 'deal_title' | 'deal_until'
+  > &
+    Partial<Pick<PlaceWithRelations, 'deal_title' | 'deal_until'>> & {
     photos: string[];
     dishes: [string, number, boolean?][];
   }
 ): PlaceWithRelations {
   const { photos, dishes, ...rest } = p;
   return {
+    deal_title: null,
+    deal_until: null,
     ...rest,
     is_published: true,
     cover_image_url: img(photos[0]),
@@ -40,6 +46,7 @@ function place(
 export const demoPlaces: PlaceWithRelations[] = [
   place({
     id: 'demo-pho',
+    deal_title: 'Tặng 1 phần quẩy khi đưa app Ăn Gì HCM',
     amenities: ['giu-xe', 'the'],
     latitude: 10.7769,
     longitude: 106.7009,

@@ -1,7 +1,21 @@
 import { demoCategories, demoPlaces } from './demo-data';
 import { parseQueryLocal, type ParsedQuery } from './filters';
 import { isSupabaseConfigured, PHOTO_BUCKET, supabase } from './supabase';
-import { AMENITIES, DISTRICTS, OCCASIONS, type Category, type Dish, type Photo, type Place, type PlaceWithRelations } from './types';
+import { getDeviceId } from './device';
+import {
+  AMENITIES,
+  DISTRICTS,
+  OCCASIONS,
+  type Category,
+  type Dish,
+  type Photo,
+  type Place,
+  type PlaceEventKind,
+  type PlaceStats,
+  type PlaceSuggestion,
+  type PlaceWithRelations,
+  type Poll,
+} from './types';
 
 /** Chưa có app/.env → chạy bằng dữ liệu mẫu trong bộ nhớ (xem demo-data.ts). */
 export const isDemo = !isSupabaseConfigured;
@@ -201,13 +215,208 @@ function sanitizeParsed(d: Partial<ParsedQuery>, categories: Category[]): Parsed
     nearMe: d.nearMe === true || num(d.radiusKm) != null,
     radiusKm: num(d.radiusKm),
     amenities: Array.isArray(d.amenities) ? d.amenities.filter((a) => AMENITIES.some((x) => x.key === a)) : [],
+    dealOnly: d.dealOnly === true,
     keywords: typeof d.keywords === 'string' ? d.keywords.slice(0, 60) : '',
     unsupported: Array.isArray(d.unsupported) ? d.unsupported.filter((x): x is string => typeof x === 'string').slice(0, 5) : [],
     source: 'ai',
   };
 }
 
+// ---------- Chọn quán cùng hội bạn ----------
+// Khách không đăng nhập: mọi thao tác qua RPC (xem schema.sql), kèm mã máy getDeviceId().
+
+/** Tạo bình chọn từ 2–8 quán, trả về id (dùng làm link /vote/<id>). */
+export async function createPoll(title: string, creatorName: string, placeIds: string[]): Promise<string> {
+  const device = getDeviceId();
+  if (isDemo) {
+    const id = `demo-poll-${Date.now()}`;
+    demoPolls.set(id, {
+      id,
+      title: title.trim() || 'Đi ăn gì đây?',
+      creator_name: creatorName.trim() || null,
+      creator_device: device,
+      winner_place_id: null,
+      closed_at: null,
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 7 * 864e5).toISOString(),
+      place_ids: [...new Set(placeIds)],
+      votes: [],
+    });
+    return id;
+  }
+  const { data, error } = await supabase.rpc('create_poll', {
+    p_title: title,
+    p_creator_name: creatorName,
+    p_device: device,
+    p_place_ids: placeIds,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Xem bình chọn (null nếu không có). */
+export async function fetchPoll(id: string): Promise<Poll | null> {
+  const device = getDeviceId();
+  if (isDemo) {
+    const p = demoPolls.get(id);
+    if (!p) return null;
+    return {
+      id: p.id,
+      title: p.title,
+      creator_name: p.creator_name,
+      is_creator: p.creator_device === device,
+      winner_place_id: p.winner_place_id,
+      closed_at: p.closed_at,
+      expires_at: p.expires_at,
+      created_at: p.created_at,
+      options: p.place_ids.map((place_id) => ({
+        place_id,
+        voters: p.votes.filter((v) => v.place_id === place_id).map((v) => v.name),
+        mine: p.votes.some((v) => v.place_id === place_id && v.device === device),
+      })),
+    };
+  }
+  const { data, error } = await supabase.rpc('get_poll', { p_id: id, p_device: device });
+  if (error) throw error;
+  return (data as Poll | null) ?? null;
+}
+
+/** Bỏ phiếu cho 1 quán (mỗi máy 1 phiếu, bỏ lại là đổi phiếu). */
+export async function castVote(pollId: string, name: string, placeId: string) {
+  const device = getDeviceId();
+  if (isDemo) {
+    const p = demoPolls.get(pollId);
+    if (!p || p.closed_at) throw new Error('Bình chọn đã kết thúc');
+    p.votes = [...p.votes.filter((v) => v.device !== device), { device, name: name.trim(), place_id: placeId }];
+    return;
+  }
+  const { error } = await supabase.rpc('cast_vote', { p_poll: pollId, p_device: device, p_name: name, p_place: placeId });
+  if (error) throw error;
+}
+
+/** Người tạo chốt quán thắng (kết thúc bình chọn). */
+export async function closePoll(pollId: string, placeId: string) {
+  const device = getDeviceId();
+  if (isDemo) {
+    const p = demoPolls.get(pollId);
+    if (!p || p.creator_device !== device) throw new Error('Chỉ người tạo được chốt quán');
+    p.winner_place_id = placeId;
+    p.closed_at = new Date().toISOString();
+    return;
+  }
+  const { error } = await supabase.rpc('close_poll', { p_poll: pollId, p_device: device, p_place: placeId });
+  if (error) throw error;
+}
+
+// ---------- Khách gợi ý quán ----------
+
+export async function suggestPlace(name: string, mapsUrl: string, note: string) {
+  if (isDemo) {
+    demoSuggestions.unshift({
+      id: Date.now(),
+      name: name.trim(),
+      maps_url: mapsUrl.trim() || null,
+      note: note.trim() || null,
+      created_at: new Date().toISOString(),
+    });
+    return;
+  }
+  const { error } = await supabase.rpc('suggest_place', { p_name: name, p_maps_url: mapsUrl, p_note: note, p_device: getDeviceId() });
+  if (error) throw error;
+}
+
+/** Admin: danh sách gợi ý mới nhất. */
+export async function fetchSuggestions(): Promise<PlaceSuggestion[]> {
+  if (isDemo) return clone(demoSuggestions);
+  const { data, error } = await supabase
+    .from('place_suggestions')
+    .select('id, name, maps_url, note, created_at')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data ?? []) as PlaceSuggestion[];
+}
+
+/** Admin: xoá gợi ý (đã xử lý hoặc rác). */
+export async function deleteSuggestion(id: number) {
+  if (isDemo) {
+    const i = demoSuggestions.findIndex((s) => s.id === id);
+    if (i >= 0) demoSuggestions.splice(i, 1);
+    return;
+  }
+  const { error } = await supabase.from('place_suggestions').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---------- Thống kê & Đang hot ----------
+
+/** Ghi 1 lượt xem/chỉ đường/gọi/chia sẻ. Không bao giờ ném lỗi (không làm phiền người dùng). */
+export function trackEvent(placeId: string, kind: PlaceEventKind) {
+  if (isDemo) {
+    demoEvents.push({ place_id: placeId, kind, at: Date.now() });
+    return;
+  }
+  supabase.rpc('track_event', { p_place: placeId, p_kind: kind }).then(
+    () => {},
+    () => {}
+  );
+}
+
+/** Admin: thống kê theo quán trong `days` ngày gần nhất. */
+export async function fetchPlaceStats(days = 7): Promise<PlaceStats[]> {
+  if (isDemo) {
+    const since = Date.now() - days * 864e5;
+    const map = new Map<string, PlaceStats>();
+    for (const e of demoEvents) {
+      if (e.at < since) continue;
+      const s = map.get(e.place_id) ?? { place_id: e.place_id, views: 0, directions: 0, calls: 0, shares: 0 };
+      if (e.kind === 'view') s.views++;
+      else if (e.kind === 'directions') s.directions++;
+      else if (e.kind === 'call') s.calls++;
+      else s.shares++;
+      map.set(e.place_id, s);
+    }
+    return [...map.values()];
+  }
+  const { data, error } = await supabase.rpc('place_stats', { p_days: days });
+  if (error) throw error;
+  return ((data ?? []) as PlaceStats[]).map((s) => ({
+    place_id: s.place_id,
+    views: Number(s.views),
+    directions: Number(s.directions),
+    calls: Number(s.calls),
+    shares: Number(s.shares),
+  }));
+}
+
+/** Quán "Đang hot" 7 ngày (id theo thứ tự điểm giảm dần). */
+export async function fetchTrending(limit = 10): Promise<string[]> {
+  if (isDemo) {
+    const score = new Map<string, number>();
+    for (const e of demoEvents) score.set(e.place_id, (score.get(e.place_id) ?? 0) + (e.kind === 'view' ? 1 : 3));
+    for (const p of demoPolls.values()) for (const v of p.votes) score.set(v.place_id, (score.get(v.place_id) ?? 0) + 2);
+    // Demo chưa có ai dùng → lấy vài quán mẫu cho có nội dung.
+    if (!score.size) return demoPlaces.slice(0, 4).map((p) => p.id);
+    return [...score.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([id]) => id);
+  }
+  const { data, error } = await supabase.rpc('trending_places', { p_limit: limit });
+  if (error) throw error;
+  return ((data ?? []) as { place_id: string }[]).map((r) => r.place_id);
+}
+
 // ---------- Chế độ demo: ghi vào bộ nhớ ----------
+type DemoPoll = Omit<Poll, 'is_creator' | 'options'> & {
+  creator_device: string;
+  place_ids: string[];
+  votes: { device: string; name: string; place_id: string }[];
+};
+const demoPolls = new Map<string, DemoPoll>();
+const demoSuggestions: PlaceSuggestion[] = [];
+const demoEvents: { place_id: string; kind: PlaceEventKind; at: number }[] = [];
+
 function demoFind(id: string): PlaceWithRelations {
   const p = demoPlaces.find((x) => x.id === id);
   if (!p) throw new Error('Không tìm thấy quán');

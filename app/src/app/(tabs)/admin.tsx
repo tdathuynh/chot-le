@@ -1,20 +1,158 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlaceCard } from '@/components/place-card';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Button, Center, Field } from '@/components/ui';
+import { Badge, Button, Center, Chip, Field, Section } from '@/components/ui';
 import { MaxContentWidth, Radii, Shadows, Spacing, WebTopInset } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { fetchPlaces, isDemo, setPublished } from '@/lib/api';
+import {
+  deleteSuggestion,
+  fetchPlaceStats,
+  fetchPlaces,
+  fetchSuggestions,
+  isDemo,
+  setPublished,
+} from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { notify } from '@/lib/confirm';
+import { confirmAsync, notify } from '@/lib/confirm';
 import { normalize } from '@/lib/format';
-import type { PlaceWithRelations } from '@/lib/types';
+import type { PlaceStats, PlaceSuggestion, PlaceWithRelations } from '@/lib/types';
+
+type StatDays = 7 | 30;
+const SUGGESTIONS_PREVIEW = 3;
+
+function errMessage(e: unknown) {
+  if (e instanceof Error) return e.message;
+  return (e as { message?: string } | null)?.message ?? 'Đã có lỗi xảy ra.';
+}
+
+function statTotal(s: PlaceStats) {
+  return s.views + s.directions + s.calls + s.shares;
+}
+
+function statLine(s: PlaceStats) {
+  const parts: string[] = [];
+  if (s.views) parts.push(`${s.views} xem`);
+  if (s.directions) parts.push(`${s.directions} chỉ đường`);
+  if (s.calls) parts.push(`${s.calls} gọi`);
+  if (s.shares) parts.push(`${s.shares} chia sẻ`);
+  return parts.join(' · ');
+}
+
+/** "vừa xong", "5 phút trước", "3 ngày trước", hoặc dd/mm/yyyy nếu quá 30 ngày. */
+function relativeTime(iso: string) {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (Number.isNaN(diff)) return '';
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'vừa xong';
+  if (min < 60) return `${min} phút trước`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} giờ trước`;
+  const days = Math.floor(h / 24);
+  if (days < 30) return `${days} ngày trước`;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+function StatTile({ icon, label, value }: { icon: 'eye' | 'navigation' | 'phone' | 'share'; label: string; value: number }) {
+  const t = useTheme();
+  return (
+    <View style={[styles.statTile, { backgroundColor: t.backgroundElement }]}>
+      <Icon name={icon} size={16} themeColor="tint" />
+      <ThemedText type="subtitle" numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </ThemedText>
+      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} adjustsFontSizeToFit>
+        {label}
+      </ThemedText>
+    </View>
+  );
+}
+
+function SuggestionItem({
+  item,
+  deleting,
+  onCreate,
+  onDelete,
+}: {
+  item: PlaceSuggestion;
+  deleting: boolean;
+  onCreate: () => void;
+  onDelete: () => void;
+}) {
+  const t = useTheme();
+  const openLink = () => {
+    if (!item.maps_url) return;
+    Linking.openURL(item.maps_url).catch(() => notify('Không mở được link', item.maps_url ?? undefined));
+  };
+  return (
+    <View style={[styles.suggestionItem, { backgroundColor: t.card, borderColor: t.cardBorder }, Shadows.soft]}>
+      <View style={styles.suggestionTop}>
+        <View style={[styles.suggestionIcon, { backgroundColor: t.tintSubtle }]}>
+          <Icon name="lightbulb" size={18} themeColor="tint" />
+        </View>
+        <View style={styles.flexShrink}>
+          <ThemedText type="defaultBold" numberOfLines={2}>
+            {item.name}
+          </ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary">
+            {relativeTime(item.created_at)}
+          </ThemedText>
+        </View>
+      </View>
+      {item.note ? (
+        <ThemedText type="small" themeColor="textSecondary" numberOfLines={4}>
+          {item.note}
+        </ThemedText>
+      ) : null}
+      {item.maps_url ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Mở link Google Maps"
+          onPress={openLink}
+          style={({ pressed }) => [
+            styles.suggestionLink,
+            { backgroundColor: t.backgroundElement, opacity: pressed ? 0.7 : 1 },
+          ]}>
+          <Icon name="map-pin" size={16} themeColor="tint" />
+          <ThemedText
+            type="small"
+            numberOfLines={1}
+            ellipsizeMode="middle"
+            style={[styles.flexShrink, { color: t.tint }]}>
+            {item.maps_url}
+          </ThemedText>
+        </Pressable>
+      ) : null}
+      <View style={styles.suggestionActions}>
+        <Button
+          title="Tạo quán"
+          icon={<Icon name="plus" size={17} themeColor="tint" />}
+          variant="tintSubtle"
+          size="sm"
+          style={styles.flex}
+          onPress={onCreate}
+          disabled={deleting}
+        />
+        <Button
+          title="Xoá"
+          icon={<Icon name="trash-2" size={17} themeColor="danger" />}
+          variant="secondary"
+          size="sm"
+          style={styles.flex}
+          onPress={onDelete}
+          loading={deleting}
+        />
+      </View>
+    </View>
+  );
+}
 
 function LoginForm() {
   const t = useTheme();
@@ -104,8 +242,101 @@ export default function AdminScreen() {
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
+  const [statDays, setStatDays] = useState<StatDays>(7);
+  const [stats, setStats] = useState<PlaceStats[]>([]);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const statsReq = useRef(0);
+  const statDaysRef = useRef<StatDays>(7);
+
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const loadStats = useCallback((days: StatDays) => {
+    const req = ++statsReq.current;
+    setStatsLoading(true);
+    fetchPlaceStats(days).then(
+      (data) => {
+        if (req !== statsReq.current) return;
+        setStats(data);
+        setStatsError(null);
+        setStatsLoading(false);
+      },
+      (e: unknown) => {
+        if (req !== statsReq.current) return;
+        setStatsError(errMessage(e));
+        setStatsLoading(false);
+      }
+    );
+  }, []);
+
+  const loadSuggestions = useCallback(() => {
+    fetchSuggestions().then(
+      (data) => {
+        setSuggestions(data);
+        setSuggestionsError(null);
+        setSuggestionsLoaded(true);
+      },
+      (e: unknown) => {
+        setSuggestionsError(errMessage(e));
+        setSuggestionsLoaded(true);
+      }
+    );
+  }, []);
+
+  const changeStatDays = (d: StatDays) => {
+    if (d === statDaysRef.current) return;
+    statDaysRef.current = d;
+    setStatDays(d);
+    loadStats(d);
+  };
+
+  const statsByPlace = useMemo(() => new Map(stats.map((s) => [s.place_id, s])), [stats]);
+  const statSum = useMemo(
+    () =>
+      stats.reduce(
+        (a, s) => ({
+          views: a.views + s.views,
+          directions: a.directions + s.directions,
+          calls: a.calls + s.calls,
+          shares: a.shares + s.shares,
+        }),
+        { views: 0, directions: 0, calls: 0, shares: 0 }
+      ),
+    [stats]
+  );
+
+  const removeSuggestion = async (s: PlaceSuggestion) => {
+    if (deletingId !== null) return;
+    const ok = await confirmAsync('Xoá gợi ý?', `Xoá gợi ý “${s.name}” khỏi danh sách?`, 'Xoá');
+    if (!ok) return;
+    setDeletingId(s.id);
+    deleteSuggestion(s.id).then(
+      () => {
+        setSuggestions((list) => list.filter((x) => x.id !== s.id));
+        setDeletingId(null);
+        loadSuggestions();
+      },
+      (e: unknown) => {
+        setDeletingId(null);
+        notify('Không xoá được', errMessage(e));
+      }
+    );
+  };
+
+  const createFromSuggestion = (s: PlaceSuggestion) => {
+    router.push({ pathname: '/edit-place/[id]', params: { id: 'new', maps: s.maps_url ?? '', name: s.name } });
+  };
+
+  const visibleSuggestions = showAllSuggestions ? suggestions : suggestions.slice(0, SUGGESTIONS_PREVIEW);
+
   const load = useCallback(async () => {
     setRefreshing(true);
+    loadStats(statDaysRef.current);
+    loadSuggestions();
     try {
       setPlaces(await fetchPlaces());
     } catch (e) {
@@ -113,7 +344,7 @@ export default function AdminScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [loadStats, loadSuggestions]);
 
   useFocusEffect(
     useCallback(() => {
@@ -196,9 +427,9 @@ export default function AdminScreen() {
                   <View style={[styles.adminAvatar, { backgroundColor: t.tintSubtle }]}>
                     <Icon name="user" size={20} themeColor="tint" />
                   </View>
-                  <View>
+                  <View style={styles.flexShrinkText}>
                     <ThemedText type="smallBold">Quản trị viên</ThemedText>
-                    <ThemedText type="caption" themeColor="textSecondary">
+                    <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
                       {session.user.email}
                     </ThemedText>
                   </View>
@@ -254,6 +485,90 @@ export default function AdminScreen() {
               onPress={() => router.push({ pathname: '/edit-place/[id]', params: { id: 'new' } })}
             />
 
+            {/* Gợi ý từ người dùng */}
+            <Section
+              title="Gợi ý từ người dùng"
+              action={suggestions.length ? <Badge label={String(suggestions.length)} variant="tint" /> : null}>
+              {!suggestionsLoaded ? (
+                <View style={[styles.emptyBox, { backgroundColor: t.card, borderColor: t.cardBorder }]}>
+                  <ActivityIndicator color={t.tint} />
+                </View>
+              ) : suggestionsError ? (
+                <View style={[styles.emptyBox, { backgroundColor: t.card, borderColor: t.cardBorder }]}>
+                  <ThemedText type="small" style={{ color: t.danger, textAlign: 'center' }}>
+                    Không tải được gợi ý: {suggestionsError}
+                  </ThemedText>
+                  <Button title="Thử lại" variant="secondary" size="sm" onPress={loadSuggestions} />
+                </View>
+              ) : suggestions.length === 0 ? (
+                <View style={[styles.emptyBox, { backgroundColor: t.card, borderColor: t.cardBorder }]}>
+                  <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                    Chưa có gợi ý nào. Quán người dùng gửi qua mục “Gợi ý quán ngon” sẽ hiện ở đây.
+                  </ThemedText>
+                </View>
+              ) : (
+                <View style={styles.suggestionList}>
+                  {visibleSuggestions.map((s) => (
+                    <SuggestionItem
+                      key={s.id}
+                      item={s}
+                      deleting={deletingId === s.id}
+                      onCreate={() => createFromSuggestion(s)}
+                      onDelete={() => removeSuggestion(s)}
+                    />
+                  ))}
+                  {suggestions.length > SUGGESTIONS_PREVIEW ? (
+                    <Button
+                      title={showAllSuggestions ? 'Thu gọn' : `Xem tất cả (${suggestions.length})`}
+                      icon={
+                        <Icon name={showAllSuggestions ? 'chevron-up' : 'chevron-down'} size={17} themeColor="tint" />
+                      }
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => setShowAllSuggestions((v) => !v)}
+                    />
+                  ) : null}
+                </View>
+              )}
+            </Section>
+
+            {/* Thống kê lượt quan tâm */}
+            <Section title="Lượt quan tâm">
+              <View style={[styles.statsCard, { backgroundColor: t.card, borderColor: t.cardBorder }, Shadows.soft]}>
+                <View style={styles.statsHeader}>
+                  <View style={styles.statsTitle}>
+                    <Icon name="chart-column" size={18} themeColor="tint" />
+                    <ThemedText type="smallBold" numberOfLines={1} style={styles.flexShrinkText}>
+                      {statDays} ngày gần nhất
+                    </ThemedText>
+                    {statsLoading ? <ActivityIndicator size="small" color={t.tint} /> : null}
+                  </View>
+                  <View style={styles.daysToggle}>
+                    <Chip label="7 ngày" selected={statDays === 7} onPress={() => changeStatDays(7)} />
+                    <Chip label="30 ngày" selected={statDays === 30} onPress={() => changeStatDays(30)} />
+                  </View>
+                </View>
+                {statsError ? (
+                  <View style={styles.statsErrorRow}>
+                    <ThemedText type="small" style={[styles.flexShrink, { color: t.danger }]}>
+                      Không tải được thống kê: {statsError}
+                    </ThemedText>
+                    <Button title="Thử lại" variant="secondary" size="sm" onPress={() => loadStats(statDays)} />
+                  </View>
+                ) : (
+                  <View style={[styles.statTiles, statsLoading && stats.length === 0 ? styles.dimmed : null]}>
+                    <StatTile icon="eye" label="Lượt xem" value={statSum.views} />
+                    <StatTile icon="navigation" label="Chỉ đường" value={statSum.directions} />
+                    <StatTile icon="phone" label="Gọi" value={statSum.calls} />
+                    <StatTile icon="share" label="Chia sẻ" value={statSum.shares} />
+                  </View>
+                )}
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Số liệu này dùng để báo cáo cho chủ quán (gói quán đối tác).
+                </ThemedText>
+              </View>
+            </Section>
+
             {/* Search Manage Places */}
             <View
               style={[
@@ -299,6 +614,7 @@ export default function AdminScreen() {
               Shadows.soft,
             ]}>
             <PlaceCard place={item} admin />
+            <PlaceStatLine stat={statsByPlace.get(item.id)} days={statDays} />
             <View style={[styles.adminActionsRow, { borderTopColor: t.border }]}>
               <Button
                 title="Sửa"
@@ -339,8 +655,106 @@ export default function AdminScreen() {
   );
 }
 
+function PlaceStatLine({ stat, days }: { stat?: PlaceStats; days: StatDays }) {
+  if (!stat || statTotal(stat) === 0) return null;
+  return (
+    <View style={styles.placeStatRow}>
+      <Icon name="trending-up" size={14} themeColor="textSecondary" />
+      <ThemedText type="caption" themeColor="textSecondary" style={styles.flexShrink}>
+        {statLine(stat)} · {days} ngày
+      </ThemedText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  flexShrink: { flex: 1, minWidth: 0 },
+  flexShrinkText: { flexShrink: 1, minWidth: 0 },
+  dimmed: { opacity: 0.5 },
+  statsCard: {
+    borderRadius: Radii.lg,
+    borderWidth: 1,
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
+  statsHeader: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  statsTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  daysToggle: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  statTiles: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  statTile: {
+    flexGrow: 1,
+    flexBasis: 64,
+    minWidth: 64,
+    paddingVertical: Spacing.two + 2,
+    paddingHorizontal: Spacing.one,
+    borderRadius: Radii.md,
+    alignItems: 'center',
+    gap: 2,
+  },
+  statsErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  placeStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one + 2,
+    paddingHorizontal: Spacing.three,
+  },
+  suggestionList: {
+    gap: Spacing.two + 2,
+  },
+  suggestionItem: {
+    borderRadius: Radii.lg,
+    borderWidth: 1,
+    padding: Spacing.three,
+    gap: Spacing.two + 2,
+  },
+  suggestionTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two + 2,
+  },
+  suggestionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  suggestionLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 44,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radii.md,
+  },
+  suggestionActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
   list: {
     padding: Spacing.three,
     paddingBottom: Spacing.six * 2,
@@ -367,6 +781,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+    flexShrink: 1,
+    minWidth: 0,
+    marginRight: Spacing.two,
   },
   adminAvatar: {
     width: 38,
@@ -432,6 +849,7 @@ const styles = StyleSheet.create({
     borderRadius: Radii.md,
     borderWidth: 1,
     alignItems: 'center',
+    gap: Spacing.two,
   },
 
   /* Login Form */

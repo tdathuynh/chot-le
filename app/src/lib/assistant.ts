@@ -46,6 +46,7 @@ export const STARTER_SUGGESTIONS = [
   'Lẩu cho nhóm 5 người dưới 200k',
   'Quán hẹn hò ở Quận 1',
   'Cà phê có wifi đang mở',
+  'Quán đang có ưu đãi',
   'Ăn gì cũng được, chọn giùm',
 ];
 
@@ -75,7 +76,7 @@ export function answer(input: string, ctx: AssistantContext): AssistantReply {
   }
   if (has(t, 'ban la ai', 'ban lam duoc gi', 'giup gi', 'huong dan', 'help')) {
     return {
-      text: 'Mình tìm quán theo món, khu vực, giá, giờ mở cửa, dịp đi ăn (hẹn hò, đi nhóm, gia đình…) và tiện ích (máy lạnh, chỗ để xe, wifi…). Sau đó bạn có thể nói "rẻ hơn", "gần hơn" hoặc "còn quán khác không".',
+      text: 'Mình tìm quán theo món, khu vực, giá, giờ mở cửa, dịp đi ăn (hẹn hò, đi nhóm, gia đình…) và tiện ích (máy lạnh, chỗ để xe, wifi…), cả quán đang có ưu đãi riêng cho khách dùng app. Sau đó bạn có thể nói "rẻ hơn", "gần hơn" hoặc "còn quán khác không".',
       places: [],
       suggestions: STARTER_SUGGESTIONS,
       filters: null,
@@ -134,7 +135,7 @@ export function answer(input: string, ctx: AssistantContext): AssistantReply {
   // ---- Câu tìm quán ----
   const p = parseQueryLocal(raw, ctx.categories);
   const structured =
-    p.maxPrice != null || p.nearMe || p.occasion != null || p.openOnly || p.district != null || p.categoryId != null || p.amenities.length > 0;
+    p.maxPrice != null || p.nearMe || p.occasion != null || p.openOnly || p.district != null || p.categoryId != null || p.amenities.length > 0 || p.dealOnly;
   // Câu ngắn kiểu "quận 3 thì sao", "còn lẩu?" → giữ tiêu chí cũ, thay phần mới.
   const followUp = prev && structured && (has(t, 'thi sao', 'con', 'the con', 'vay con', 'nhung', 'them', 'ma') || raw.split(/\s+/).length <= 4);
   let f = followUp ? parsedToFilters(p, { ...prev, query: '' }) : parsedToFilters(p);
@@ -187,6 +188,7 @@ function listReply(f: Filters, ctx: AssistantContext, offset: number, mode: 'new
   const relaxers: [string, Partial<Filters>][] = [
     ['tiện ích', { amenities: [] }],
     ['"đang mở"', { openOnly: false }],
+    ['ưu đãi', { dealOnly: false }],
     ['dịp đi ăn', { occasion: null }],
     ['khu vực', { district: null }],
     ['bán kính', { radiusKm: null }],
@@ -233,5 +235,6 @@ function suggestFor(f: Filters, hasMore: boolean): string[] {
   if (f.maxPrice == null || f.maxPrice > 30000) out.push('Rẻ hơn');
   out.push(f.nearMe ? 'Gần hơn' : 'Gần tôi');
   if (!f.openOnly) out.push('Đang mở thôi');
+  if (!f.dealOnly) out.push('Có ưu đãi không?');
   return out.slice(0, 4);
 }

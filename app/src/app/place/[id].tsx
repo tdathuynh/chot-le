@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Linking,
   NativeScrollEvent,
@@ -22,10 +22,10 @@ import { ThemedView } from '@/components/themed-view';
 import { Badge, Button, Center } from '@/components/ui';
 import { MaxContentWidth, Radii, Shadows, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { fetchCategories, fetchPlace } from '@/lib/api';
+import { fetchCategories, fetchPlace, trackEvent } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { notify } from '@/lib/confirm';
-import { formatPrice, formatPriceRange, isOpenNow, shortTime } from '@/lib/format';
+import { formatDate, formatPrice, formatPriceRange, isDealActive, isOpenNow, shortTime } from '@/lib/format';
 import { directionsUrl, formatDistance, placeDistance, requestLocation, useUserLocation } from '@/lib/location';
 import { AMENITIES, occasionLabel, OCCASIONS, type Category, type PlaceWithRelations } from '@/lib/types';
 
@@ -39,12 +39,22 @@ export default function PlaceDetail() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const loc = useUserLocation();
+  // Mỗi lần mở app chỉ tính 1 lượt xem / quán; admin xem không tính (số liệu báo cho chủ quán).
+  const viewed = useRef<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      fetchPlace(id).then(setPlace).catch(() => setPlace(null));
+      fetchPlace(id)
+        .then((p) => {
+          setPlace(p);
+          if (p?.is_published && viewed.current !== p.id && !isAdmin) {
+            viewed.current = p.id;
+            trackEvent(p.id, 'view');
+          }
+        })
+        .catch(() => setPlace(null));
       fetchCategories().then(setCategories).catch(() => {});
-    }, [id])
+    }, [id, isAdmin])
   );
 
   if (place === undefined) {
@@ -82,6 +92,17 @@ export default function PlaceDetail() {
   const price = formatPriceRange(place);
   const dist = placeDistance(place, loc.status === 'granted' ? loc.coords : null);
   const occasions = (place.occasions ?? []).filter((o) => OCCASIONS.some((x) => x.key === o));
+  const deal = isDealActive(place);
+
+  const openDirections = () => {
+    trackEvent(place.id, 'directions');
+    Linking.openURL(directionsUrl(place));
+  };
+  const callPlace = () => {
+    trackEvent(place.id, 'call');
+    Linking.openURL(`tel:${place.phone!.replace(/\s/g, '')}`);
+  };
+  const inviteFriends = () => router.push({ pathname: '/vote/new', params: { ids: place.id } });
 
   const onScrollPhotos = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const slide = Math.round(e.nativeEvent.contentOffset.x / contentWidth);
@@ -95,6 +116,7 @@ export default function PlaceDetail() {
     const text = `${place.name}${price ? ` (${price})` : ''}
 ${place.address}, ${place.district}
 ${directionsUrl(place)}`;
+    trackEvent(place.id, 'share');
     try {
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && typeof navigator.share !== 'function') {
         await navigator.clipboard.writeText(text);
@@ -233,6 +255,25 @@ ${directionsUrl(place)}`;
             ) : null}
           </View>
 
+          {/* Ưu đãi độc quyền cho khách dùng app */}
+          {deal ? (
+            <View style={[styles.dealCard, { backgroundColor: t.tintSubtle, borderColor: t.tint }]}>
+              <View style={[styles.dealIcon, { backgroundColor: t.tint }]}>
+                <Icon name="gift" size={20} color={t.tintText} />
+              </View>
+              <View style={styles.infoTextGroup}>
+                <ThemedText type="captionBold" style={{ color: t.tint, letterSpacing: 0.4 }}>
+                  ƯU ĐÃI KHI DÙNG APP
+                </ThemedText>
+                <ThemedText type="defaultBold">{place.deal_title}</ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Đưa màn hình này cho nhân viên khi thanh toán
+                  {place.deal_until ? ` · đến hết ${formatDate(place.deal_until)}` : ''}
+                </ThemedText>
+              </View>
+            </View>
+          ) : null}
+
           {/* Quick Info Card (Icons + Details) */}
           <View
             style={[
@@ -245,7 +286,7 @@ ${directionsUrl(place)}`;
             ]}>
             {/* Address */}
             <Pressable
-              onPress={() => Linking.openURL(directionsUrl(place))}
+              onPress={openDirections}
               style={styles.infoRow}>
               <View style={[styles.iconCircle, { backgroundColor: t.tintSubtle }]}>
                 <Icon name="map-pin" size={18} themeColor="tint" />
@@ -315,7 +356,7 @@ ${directionsUrl(place)}`;
             {/* Phone Number */}
             {place.phone ? (
               <Pressable
-                onPress={() => Linking.openURL(`tel:${place.phone!.replace(/\s/g, '')}`)}
+                onPress={callPlace}
                 style={[styles.infoRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.border }]}>
                 <View style={[styles.iconCircle, { backgroundColor: t.tintSubtle }]}>
                   <Icon name="phone" size={18} themeColor="tint" />
@@ -332,6 +373,30 @@ ${directionsUrl(place)}`;
               </Pressable>
             ) : null}
           </View>
+
+          {/* Đi nhóm: rủ bạn bình chọn */}
+          {place.is_published ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Rủ bạn bè bình chọn quán"
+              onPress={inviteFriends}
+              style={({ pressed }) => [
+                styles.inviteCard,
+                { backgroundColor: t.card, borderColor: t.cardBorder, opacity: pressed ? 0.85 : 1 },
+                Shadows.soft,
+              ]}>
+              <View style={[styles.iconCircle, { backgroundColor: t.tintSubtle }]}>
+                <Icon name="users" size={18} themeColor="tint" />
+              </View>
+              <View style={styles.infoTextGroup}>
+                <ThemedText type="defaultBold">Đi nhóm? Rủ bạn bè bình chọn</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Thêm vài quán nữa, gửi link vào nhóm chat, cả hội bình chọn là chốt
+                </ThemedText>
+              </View>
+              <Icon name="chevron-right" size={20} themeColor="textMuted" />
+            </Pressable>
+          ) : null}
 
           {/* Tiện ích: danh sách tick (chỉ hiện khi admin đã khai báo) */}
           {place.amenities?.length ? (
@@ -473,7 +538,7 @@ ${directionsUrl(place)}`;
               variant="secondary"
               size="lg"
               icon={<Icon name="phone" size={18} />}
-              onPress={() => Linking.openURL(`tel:${place.phone!.replace(/\s/g, '')}`)}
+              onPress={callPlace}
               style={styles.bottomCallBtn}
             />
           ) : null}
@@ -483,7 +548,7 @@ ${directionsUrl(place)}`;
             variant="primary"
             size="lg"
             icon={<Icon name="navigation" size={18} themeColor="tintText" />}
-            onPress={() => Linking.openURL(directionsUrl(place))}
+            onPress={openDirections}
             style={styles.bottomDirectionsBtn}
           />
         </View>
@@ -589,6 +654,25 @@ const styles = StyleSheet.create({
   },
   amenityGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: Spacing.two + 2 },
   amenityItem: { width: '50%', flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingRight: Spacing.two },
+  dealCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderRadius: Radii.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    padding: Spacing.three,
+  },
+  dealIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  inviteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderRadius: Radii.lg,
+    borderWidth: 1,
+    padding: Spacing.three,
+    minHeight: 64,
+  },
   infoCard: {
     borderRadius: Radii.lg,
     borderWidth: 1,

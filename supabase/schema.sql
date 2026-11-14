@@ -188,6 +188,254 @@ drop policy if exists "place-photos admin delete" on storage.objects;
 create policy "place-photos admin delete" on storage.objects
   for delete to authenticated using (bucket_id = 'place-photos' and public.is_admin());
 
+-- =====================================================================
+--  TÍNH NĂNG CỘNG ĐỒNG (khách không cần đăng nhập)
+--  Khách KHÔNG được đọc/ghi trực tiếp các bảng dưới đây (RLS chỉ cho admin đọc).
+--  Mọi thao tác của khách đi qua hàm RPC security definer: hàm tự kiểm tra
+--  dữ liệu, giới hạn số lượng và chỉ trả về đúng phần cần thiết.
+--  `device` = mã ngẫu nhiên app tạo và lưu trên máy (không phải tài khoản).
+-- =====================================================================
+
+-- ---------- Ưu đãi độc quyền của quán (admin nhập) ----------
+alter table public.places add column if not exists deal_title text;   -- vd 'Giảm 10% khi đưa app'
+alter table public.places add column if not exists deal_until date;   -- hết hạn (null = không thời hạn)
+
+-- ---------- Chọn quán cùng hội bạn (bình chọn qua link) ----------
+create table if not exists public.polls (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(title) between 1 and 80),
+  creator_name text check (char_length(creator_name) <= 40),
+  creator_device uuid not null,
+  winner_place_id uuid references public.places (id) on delete set null,
+  closed_at timestamptz,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '7 days'
+);
+create table if not exists public.poll_options (
+  poll_id uuid not null references public.polls (id) on delete cascade,
+  place_id uuid not null references public.places (id) on delete cascade,
+  sort_order int not null default 0,
+  primary key (poll_id, place_id)
+);
+create table if not exists public.poll_votes (
+  poll_id uuid not null references public.polls (id) on delete cascade,
+  voter_device uuid not null,
+  voter_name text not null check (char_length(voter_name) between 1 and 40),
+  place_id uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (poll_id, voter_device),
+  foreign key (poll_id, place_id) references public.poll_options (poll_id, place_id) on delete cascade
+);
+create index if not exists polls_creator_idx on public.polls (creator_device, created_at);
+create index if not exists polls_winner_idx on public.polls (winner_place_id);
+create index if not exists poll_options_place_idx on public.poll_options (place_id);
+create index if not exists poll_votes_option_idx on public.poll_votes (poll_id, place_id);
+
+-- ---------- Khách gợi ý quán mới (admin duyệt) ----------
+create table if not exists public.place_suggestions (
+  id bigint generated always as identity primary key,
+  name text not null check (char_length(name) between 1 and 120),
+  maps_url text check (char_length(maps_url) <= 500),
+  note text check (char_length(note) <= 500),
+  device uuid not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists place_suggestions_device_idx on public.place_suggestions (device, created_at);
+
+-- ---------- Lượt xem / chỉ đường / gọi / chia sẻ (thống kê cho quán) ----------
+create table if not exists public.place_events (
+  id bigint generated always as identity primary key,
+  place_id uuid not null references public.places (id) on delete cascade,
+  kind text not null check (kind in ('view', 'directions', 'call', 'share')),
+  created_at timestamptz not null default now()
+);
+create index if not exists place_events_place_time_idx on public.place_events (place_id, created_at);
+create index if not exists place_events_time_idx on public.place_events (created_at);
+
+alter table public.polls             enable row level security;
+alter table public.poll_options      enable row level security;
+alter table public.poll_votes        enable row level security;
+alter table public.place_suggestions enable row level security;
+alter table public.place_events      enable row level security;
+
+-- Chỉ admin đọc trực tiếp; admin được xoá gợi ý/bình chọn rác.
+drop policy if exists "polls admin" on public.polls;
+create policy "polls admin" on public.polls
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "poll_options admin" on public.poll_options;
+create policy "poll_options admin" on public.poll_options
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "poll_votes admin" on public.poll_votes;
+create policy "poll_votes admin" on public.poll_votes
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "place_suggestions admin" on public.place_suggestions;
+create policy "place_suggestions admin" on public.place_suggestions
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "place_events admin read" on public.place_events;
+create policy "place_events admin read" on public.place_events
+  for select to authenticated using (public.is_admin());
+
+grant select, delete on public.polls, public.poll_options, public.poll_votes, public.place_suggestions to authenticated;
+grant select on public.place_events to authenticated;
+
+-- Tạo bình chọn: 2–8 quán đang hiển thị; tối đa 30 bình chọn / máy / ngày.
+create or replace function public.create_poll(p_title text, p_creator_name text, p_device uuid, p_place_ids uuid[])
+returns uuid language plpgsql security definer set search_path = '' as $$
+declare
+  v_id uuid;
+  v_ids uuid[];
+begin
+  select array_agg(distinct x) into v_ids from unnest(p_place_ids) x;
+  if p_device is null or coalesce(array_length(v_ids, 1), 0) not between 2 and 8 then
+    raise exception 'Cần chọn từ 2 đến 8 quán';
+  end if;
+  if (select count(*) from public.places where id = any (v_ids) and is_published) <> array_length(v_ids, 1) then
+    raise exception 'Có quán không tồn tại';
+  end if;
+  if (select count(*) from public.polls where creator_device = p_device and created_at > now() - interval '1 day') >= 30 then
+    raise exception 'Bạn tạo quá nhiều bình chọn hôm nay';
+  end if;
+  insert into public.polls (title, creator_name, creator_device)
+  values (left(coalesce(nullif(trim(p_title), ''), 'Đi ăn gì đây?'), 80), nullif(left(trim(p_creator_name), 40), ''), p_device)
+  returning id into v_id;
+  insert into public.poll_options (poll_id, place_id, sort_order)
+  select v_id, x, ord::int from unnest(p_place_ids) with ordinality as t (x, ord)
+  where x = any (v_ids)
+  on conflict do nothing;
+  return v_id;
+end;
+$$;
+
+-- Xem bình chọn: không lộ mã máy của người khác, chỉ cho biết phiếu nào là của mình.
+create or replace function public.get_poll(p_id uuid, p_device uuid)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object(
+    'id', p.id,
+    'title', p.title,
+    'creator_name', p.creator_name,
+    'is_creator', p.creator_device = p_device,
+    'winner_place_id', p.winner_place_id,
+    'closed_at', p.closed_at,
+    'expires_at', p.expires_at,
+    'created_at', p.created_at,
+    'options', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'place_id', o.place_id,
+        'voters', coalesce((select jsonb_agg(v.voter_name order by v.created_at) from public.poll_votes v
+                            where v.poll_id = o.poll_id and v.place_id = o.place_id), '[]'::jsonb),
+        'mine', exists (select 1 from public.poll_votes v
+                        where v.poll_id = o.poll_id and v.place_id = o.place_id and v.voter_device = p_device)
+      ) order by o.sort_order)
+      from public.poll_options o where o.poll_id = p.id
+    ), '[]'::jsonb)
+  )
+  from public.polls p where p.id = p_id;
+$$;
+
+-- Bỏ phiếu (mỗi máy 1 phiếu, bấm quán khác là đổi phiếu).
+create or replace function public.cast_vote(p_poll uuid, p_device uuid, p_name text, p_place uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if p_device is null or coalesce(trim(p_name), '') = '' then
+    raise exception 'Cần nhập tên';
+  end if;
+  if not exists (select 1 from public.polls where id = p_poll and closed_at is null and expires_at > now()) then
+    raise exception 'Bình chọn đã kết thúc';
+  end if;
+  if not exists (select 1 from public.poll_options where poll_id = p_poll and place_id = p_place) then
+    raise exception 'Quán không có trong bình chọn';
+  end if;
+  insert into public.poll_votes (poll_id, voter_device, voter_name, place_id)
+  values (p_poll, p_device, left(trim(p_name), 40), p_place)
+  on conflict (poll_id, voter_device)
+  do update set place_id = excluded.place_id, voter_name = excluded.voter_name, created_at = now();
+end;
+$$;
+
+-- Chốt quán: chỉ người tạo.
+create or replace function public.close_poll(p_poll uuid, p_device uuid, p_place uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if not exists (select 1 from public.poll_options where poll_id = p_poll and place_id = p_place) then
+    raise exception 'Quán không có trong bình chọn';
+  end if;
+  update public.polls set winner_place_id = p_place, closed_at = now()
+  where id = p_poll and creator_device = p_device;
+  if not found then
+    raise exception 'Chỉ người tạo được chốt quán';
+  end if;
+end;
+$$;
+
+-- Gợi ý quán: tối đa 10 gợi ý / máy / ngày.
+create or replace function public.suggest_place(p_name text, p_maps_url text, p_note text, p_device uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if p_device is null or coalesce(trim(p_name), '') = '' then
+    raise exception 'Cần nhập tên quán';
+  end if;
+  if (select count(*) from public.place_suggestions where device = p_device and created_at > now() - interval '1 day') >= 10 then
+    raise exception 'Bạn đã gợi ý nhiều quán hôm nay, cảm ơn bạn!';
+  end if;
+  insert into public.place_suggestions (name, maps_url, note, device)
+  values (left(trim(p_name), 120), nullif(left(trim(p_maps_url), 500), ''), nullif(left(trim(p_note), 500), ''), p_device);
+end;
+$$;
+
+-- Ghi 1 sự kiện (chỉ quán đang hiển thị).
+create or replace function public.track_event(p_place uuid, p_kind text)
+returns void language sql security definer set search_path = '' as $$
+  insert into public.place_events (place_id, kind)
+  select p.id, p_kind from public.places p
+  where p.id = p_place and p.is_published and p_kind in ('view', 'directions', 'call', 'share');
+$$;
+
+-- Thống kê theo quán trong N ngày: chỉ admin.
+create or replace function public.place_stats(p_days int default 7)
+returns table (place_id uuid, views bigint, directions bigint, calls bigint, shares bigint)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ admin';
+  end if;
+  return query
+  select e.place_id,
+    count(*) filter (where e.kind = 'view'),
+    count(*) filter (where e.kind = 'directions'),
+    count(*) filter (where e.kind = 'call'),
+    count(*) filter (where e.kind = 'share')
+  from public.place_events e
+  where e.created_at > now() - make_interval(days => greatest(1, least(p_days, 90)))
+  group by e.place_id;
+end;
+$$;
+
+-- "Đang hot": quán được quan tâm nhiều nhất 7 ngày (chỉ trả điểm tổng hợp, ai cũng xem được).
+create or replace function public.trending_places(p_limit int default 10)
+returns table (place_id uuid, score bigint)
+language sql stable security definer set search_path = '' as $$
+  select s.place_id, sum(s.pts)::bigint as score from (
+    select e.place_id, case e.kind when 'view' then 1 else 3 end as pts
+    from public.place_events e where e.created_at > now() - interval '7 days'
+    union all
+    select v.place_id, 2 from public.poll_votes v where v.created_at > now() - interval '7 days'
+  ) s
+  join public.places p on p.id = s.place_id and p.is_published
+  group by s.place_id
+  order by score desc
+  limit greatest(1, least(p_limit, 20));
+$$;
+
+grant execute on function public.create_poll(text, text, uuid, uuid[]) to anon, authenticated;
+grant execute on function public.get_poll(uuid, uuid) to anon, authenticated;
+grant execute on function public.cast_vote(uuid, uuid, text, uuid) to anon, authenticated;
+grant execute on function public.close_poll(uuid, uuid, uuid) to anon, authenticated;
+grant execute on function public.suggest_place(text, text, text, uuid) to anon, authenticated;
+grant execute on function public.track_event(uuid, text) to anon, authenticated;
+grant execute on function public.trending_places(int) to anon, authenticated;
+revoke execute on function public.place_stats(int) from public, anon;
+grant execute on function public.place_stats(int) to authenticated;
+
 -- ---------- Danh mục mẫu ----------
 insert into public.categories (name, icon, sort_order) values
   ('Bún / Phở', 'soup', 1),

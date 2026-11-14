@@ -1,3 +1,4 @@
+import { router, Stack, useNavigation } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import {
@@ -288,6 +289,32 @@ export function Center({ children, style }: { children: ReactNode; style?: Style
   return <View style={[styles.center, style]}>{children}</View>;
 }
 
+/**
+ * Màn hình mở thẳng từ link (web: link Zalo/Messenger, hoặc tải lại trang) không có trang trước
+ * → header không có nút quay lại. Đặt component này trong màn hình để hiện nút về trang chủ.
+ */
+export function HomeButtonIfNoBack() {
+  // Dùng navigation của màn hình (router.canGoBack() ném lỗi ở lần render đầu khi mở thẳng link).
+  const navigation = useNavigation();
+  if (navigation.canGoBack()) return null;
+  return (
+    <Stack.Screen
+      options={{
+        headerLeft: () => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Về trang chủ"
+            onPress={() => router.replace('/')}
+            hitSlop={8}
+            style={styles.headerHome}>
+            <Icon name="house" size={22} themeColor="tint" />
+          </Pressable>
+        ),
+      }}
+    />
+  );
+}
+
 export function ModalSheet({
   visible,
   onClose,
@@ -468,6 +495,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerHome: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

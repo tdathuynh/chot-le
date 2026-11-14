@@ -43,6 +43,10 @@ export type Place = {
   occasions: string[];
   /** Tiện ích: khóa trong AMENITIES (vd 'may-lanh'). */
   amenities: string[];
+  /** Ưu đãi độc quyền khi khách đưa app ra (vd "Giảm 10% hóa đơn"); null = không có. */
+  deal_title: string | null;
+  /** Hạn ưu đãi "2026-12-31" (null = không thời hạn). */
+  deal_until: string | null;
   is_featured: boolean;
   is_published: boolean;
   created_at: string;
@@ -54,6 +58,27 @@ export type PlaceWithRelations = Place & {
   dishes?: Dish[];
   place_photos?: Photo[];
 };
+
+/** Bình chọn "Chọn quán cùng hội bạn" (dữ liệu từ RPC get_poll). */
+export type PollOption = { place_id: string; voters: string[]; mine: boolean };
+export type Poll = {
+  id: string;
+  title: string;
+  creator_name: string | null;
+  is_creator: boolean;
+  winner_place_id: string | null;
+  closed_at: string | null;
+  expires_at: string;
+  created_at: string;
+  options: PollOption[];
+};
+
+/** Khách gợi ý quán (admin duyệt). */
+export type PlaceSuggestion = { id: number; name: string; maps_url: string | null; note: string | null; created_at: string };
+
+/** Thống kê 1 quán trong N ngày (RPC place_stats, chỉ admin). */
+export type PlaceStats = { place_id: string; views: number; directions: number; calls: number; shares: number };
+export type PlaceEventKind = 'view' | 'directions' | 'call' | 'share';
 
 /** Mục đích đi ăn — lưu khóa (key) trong cột places.occasions. */
 export const OCCASIONS = [

@@ -1,4 +1,4 @@
-import { formatPrice, isOpenNow, normalize } from './format';
+import { formatPrice, isDealActive, isOpenNow, normalize } from './format';
 import { placeDistance, type Coords } from './location';
 import { amenityLabel, DISTRICTS, OCCASIONS, occasionLabel, type Category, type PlaceWithRelations } from './types';
 
@@ -16,6 +16,8 @@ export type Filters = {
   radiusKm: number | null;
   /** Tiện ích bắt buộc phải có (máy lạnh, chỗ để xe…). */
   amenities: string[];
+  /** Chỉ quán đang có ưu đãi độc quyền. */
+  dealOnly: boolean;
 };
 
 export const EMPTY_FILTERS: Filters = {
@@ -28,6 +30,7 @@ export const EMPTY_FILTERS: Filters = {
   nearMe: false,
   radiusKm: null,
   amenities: [],
+  dealOnly: false,
 };
 
 export const RADIUS_OPTIONS = [1, 3, 5, 10];
@@ -54,6 +57,7 @@ export function applyFilters(places: PlaceWithRelations[], f: Filters, me: Coord
     if (f.occasion && !(p.occasions ?? []).includes(f.occasion)) continue;
     if (f.radiusKm != null && me && (d == null || d > f.radiusKm)) continue;
     if (f.amenities.length && !f.amenities.every((a) => (p.amenities ?? []).includes(a))) continue;
+    if (f.dealOnly && !isDealActive(p)) continue;
     out.push({ ...p, distanceKm: d });
   }
   if (f.nearMe && me) {
@@ -64,7 +68,7 @@ export function applyFilters(places: PlaceWithRelations[], f: Filters, me: Coord
 
 export function isFilterActive(f: Filters) {
   return Boolean(
-    f.query || f.categoryId != null || f.district || f.maxPrice != null || f.openOnly || f.occasion || f.nearMe || f.radiusKm != null || f.amenities.length
+    f.query || f.categoryId != null || f.district || f.maxPrice != null || f.openOnly || f.occasion || f.nearMe || f.radiusKm != null || f.amenities.length || f.dealOnly
   );
 }
 
@@ -81,6 +85,7 @@ export function describeFilters(f: Filters, categories: Category[]): string[] {
   if (f.openOnly) out.push('Đang mở');
   if (f.district) out.push(f.district);
   f.amenities.forEach((a) => out.push(amenityLabel(a)));
+  if (f.dealOnly) out.push('Có ưu đãi');
   if (f.query) out.push(`“${f.query}”`);
   return out;
 }
@@ -108,6 +113,7 @@ export function filterItems(f: Filters, categories: Category[]): { key: string; 
   f.amenities.forEach((a) =>
     out.push({ key: `am-${a}`, label: amenityLabel(a), clear: { amenities: f.amenities.filter((x) => x !== a) } })
   );
+  if (f.dealOnly) out.push({ key: 'deal', label: 'Có ưu đãi', clear: { dealOnly: false } });
   if (f.query) out.push({ key: 'q', label: `“${f.query}”`, clear: { query: '' } });
   return out;
 }
@@ -127,6 +133,8 @@ export type ParsedQuery = {
   nearMe: boolean;
   radiusKm: number | null;
   amenities: string[];
+  /** Chỉ quán đang có ưu đãi ("có ưu đãi", "khuyến mãi", "giảm giá"…). */
+  dealOnly: boolean;
   /** Từ khóa còn lại để tìm theo tên quán/món (vd "phở", "sườn"). */
   keywords: string;
   /** Yêu cầu app chưa hỗ trợ (vd "máy lạnh") — hiện cho người dùng biết. */
@@ -165,7 +173,10 @@ const AMENITY_WORDS: Record<string, string[]> = {
   'ngoai-troi': ['ngoai troi', 'via he', 'san vuon', 'san thuong', 'rooftop'],
 };
 
-const UNSUPPORTED_WORDS = ['view', 'chay', 'pet', 'thu cung', 'karaoke', 'ship', 'giao hang'];
+// Ưu đãi độc quyền ("có ưu đãi", "đang khuyến mãi", "giảm giá", "voucher"…). Cụm dài cắt trước.
+const DEAL_WORDS = ['dang khuyen mai', 'dang giam gia', 'co uu dai', 'co khuyen mai', 'co giam gia', 'uu dai', 'khuyen mai', 'giam gia', 'voucher', 'deal', 'sale'];
+
+const UNSUPPORTED_WORDS =['view', 'chay', 'pet', 'thu cung', 'karaoke', 'ship', 'giao hang'];
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 const has = (text: string, word: string) => new RegExp(`(^|\\s)${word}(\\s|$)`).test(text);
@@ -181,6 +192,7 @@ export function parseQueryLocal(input: string, categories: Category[]): ParsedQu
     nearMe: false,
     radiusKm: null,
     amenities: [],
+    dealOnly: false,
     keywords: '',
     unsupported: [],
     source: 'local',
@@ -235,6 +247,13 @@ export function parseQueryLocal(input: string, categories: Category[]): ParsedQu
     cut(/\b(dang mo cua|dang mo|mo cua|ngay bay gio|bay gio|luc nay)\b/g);
   }
 
+  // Ưu đãi
+  for (const w of DEAL_WORDS) {
+    if (!has(t, w)) continue;
+    res.dealOnly = true;
+    cut(new RegExp(`(^|\\s)${w}(?=\\s|$)`, 'g'));
+  }
+
   // Quận: "quận 1", "q1", "q.3", "bình thạnh"
   for (const d of DISTRICTS) {
     const nd = normalize(d);
@@ -286,7 +305,8 @@ export function parseQueryLocal(input: string, categories: Category[]): ParsedQu
     res.openOnly ||
     res.district != null ||
     res.categoryId != null ||
-    res.amenities.length > 0;
+    res.amenities.length > 0 ||
+    res.dealOnly;
   if (!structured) res.keywords = input.trim();
   return res;
 }
@@ -294,7 +314,7 @@ export function parseQueryLocal(input: string, categories: Category[]): ParsedQu
 /** Câu có vẻ là "yêu cầu" (nhiều tiêu chí) chứ không chỉ là tên quán? */
 export function looksLikeRequest(input: string, categories: Category[]): boolean {
   const p = parseQueryLocal(input, categories);
-  const hits = [p.maxPrice != null, p.nearMe, p.occasion != null, p.openOnly, p.district != null, p.categoryId != null, p.amenities.length > 0].filter(Boolean).length;
+  const hits = [p.maxPrice != null, p.nearMe, p.occasion != null, p.openOnly, p.district != null, p.categoryId != null, p.amenities.length > 0, p.dealOnly].filter(Boolean).length;
   return hits >= 1 && input.trim().split(/\s+/).length >= 2;
 }
 
@@ -310,6 +330,7 @@ export function parsedToFilters(p: ParsedQuery, base: Filters = EMPTY_FILTERS): 
     nearMe: p.nearMe || base.nearMe,
     radiusKm: p.radiusKm ?? base.radiusKm,
     amenities: p.amenities.length ? p.amenities : base.amenities,
+    dealOnly: p.dealOnly || base.dealOnly,
   };
 }
 

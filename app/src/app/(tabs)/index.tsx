@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
@@ -22,9 +23,9 @@ import { Button, Chip } from '@/components/ui';
 import { MaxContentWidth, Radii, Shadows, Spacing, WebTopInset } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
-import { fetchCategories, fetchPlaces, isDemo, smartParse } from '@/lib/api';
+import { fetchCategories, fetchPlaces, fetchTrending, isDemo, smartParse } from '@/lib/api';
 import { notify } from '@/lib/confirm';
-import { formatPrice } from '@/lib/format';
+import { formatPrice, formatPriceRange, isDealActive } from '@/lib/format';
 import {
   applyFilters,
   describeFilters,
@@ -96,18 +97,22 @@ export default function HomeScreen() {
   // Modal filter sheet visibility
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
-  const fetchAll = useCallback(
-    () =>
-      Promise.all([fetchPlaces(), fetchCategories()])
+  const [trendingIds, setTrendingIds] = useState<string[]>([]);
+
+  const fetchAll = useCallback(() => {
+    // "Đang hot" là phần phụ: lỗi thì thôi, không ảnh hưởng danh sách chính.
+    fetchTrending(8)
+      .then(setTrendingIds)
+      .catch(() => setTrendingIds([]));
+    return Promise.all([fetchPlaces(), fetchCategories()])
         .then(([p, c]) => {
           setPlaces(p.filter((x) => x.is_published));
           setCategories(c);
           setError(null);
         })
         .catch((e: Error) => setError(e.message))
-        .finally(() => setLoading(false)),
-    []
-  );
+        .finally(() => setLoading(false));
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -154,6 +159,16 @@ export default function HomeScreen() {
     const feat = places.filter((p) => p.is_featured);
     return feat.length ? feat : places.slice(0, 4);
   }, [places, isFiltering]);
+
+  // Đang hot 7 ngày (theo lượt xem, chỉ đường, bình chọn); cần ≥ 2 quán mới hiện cho có ý nghĩa.
+  const trendingPlaces = useMemo(() => {
+    if (isFiltering) return [];
+    const byId = new Map(places.map((p) => [p.id, p]));
+    const list = trendingIds.map((id) => byId.get(id)).filter((p): p is PlaceWithRelations => Boolean(p));
+    return list.length >= 2 ? list.slice(0, 8) : [];
+  }, [places, trendingIds, isFiltering]);
+
+  const hasDeals = useMemo(() => places.some((p) => isDealActive(p)), [places]);
 
   // Không lặp lại quán đã hiện ở mục Tuyển chọn trong danh sách bên dưới.
   const listData = useMemo(() => {
@@ -389,6 +404,14 @@ export default function HomeScreen() {
           selected={nearMe}
           onPress={toggleNearMe}
         />
+        {hasDeals || f.dealOnly ? (
+          <Chip
+            label="Có ưu đãi"
+            icon={<Icon name="gift" size={14} color={f.dealOnly ? t.tintText : t.tint} />}
+            selected={f.dealOnly}
+            onPress={() => upd({ dealOnly: !f.dealOnly })}
+          />
+        ) : null}
         {OCCASIONS.map((o) => (
           <Chip
             key={o.key}
@@ -513,6 +536,68 @@ export default function HomeScreen() {
         </ScrollView>
       </View>
 
+      {/* Đi nhóm: tạo bình chọn gửi qua Zalo (tính năng lan truyền) */}
+      {!isFiltering && places.length >= 2 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Rủ hội bạn bình chọn quán"
+          onPress={() => router.push('/vote/new')}
+          style={({ pressed }) => [
+            styles.voteBanner,
+            { backgroundColor: t.tintSubtle, borderColor: t.tint, opacity: pressed ? 0.85 : 1 },
+          ]}>
+          <View style={[styles.voteBannerIcon, { backgroundColor: t.tint }]}>
+            <Icon name="users" size={20} color={t.tintText} />
+          </View>
+          <View style={styles.flex}>
+            <ThemedText type="defaultBold">Đi nhóm mà chưa chốt được quán?</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Chọn vài quán, gửi link Zalo, cả nhóm bấm bình chọn
+            </ThemedText>
+          </View>
+          <Icon name="chevron-right" size={20} themeColor="tint" />
+        </Pressable>
+      ) : null}
+
+      {/* Đang hot tuần này */}
+      {trendingPlaces.length ? (
+        <View style={styles.featuredSection}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.hotTitle}>
+              <Icon name="trending-up" size={18} themeColor="tint" />
+              <ThemedText type="subtitle" style={styles.sectionHeading}>
+                Đang hot tuần này
+              </ThemedText>
+            </View>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredScroll}>
+            {trendingPlaces.map((p, i) => (
+              <Pressable
+                key={p.id}
+                accessibilityRole="button"
+                accessibilityLabel={'Hạng ' + (i + 1) + ': ' + p.name}
+                onPress={() => router.push({ pathname: '/place/[id]', params: { id: p.id } })}
+                style={({ pressed }) => [
+                  styles.hotCard,
+                  { backgroundColor: t.card, borderColor: t.cardBorder, opacity: pressed ? 0.85 : 1 },
+                  Shadows.soft,
+                ]}>
+                <ThemedText style={[styles.hotRank, { color: i < 3 ? t.tint : t.textMuted }]}>{i + 1}</ThemedText>
+                <View style={styles.flex}>
+                  <ThemedText type="smallBold" numberOfLines={1}>
+                    {p.name}
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                    {p.district}
+                    {formatPriceRange(p) ? ' · ' + formatPriceRange(p) : ''}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
+
       {/* Featured Section (Only shown when not searching/filtering) */}
       {featuredPlaces.length > 0 ? (
         <View style={styles.featuredSection}>
@@ -535,7 +620,8 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      {/* Places List Title & Count */}
+      {/* Places List Title & Count (ẩn khi mọi quán đã nằm trong mục Tuyển chọn) */}
+      {listData.length || isFiltering || !featuredPlaces.length ? (
       <View style={styles.listTitleRow}>
         <ThemedText type="subtitle" style={styles.listHeading}>
           {nearMe && me
@@ -550,7 +636,26 @@ export default function HomeScreen() {
           {listData.length} quán
         </ThemedText>
       </View>
+      ) : null}
     </View>
+  );
+
+  // Cuối danh sách: mời khách gợi ý quán (dữ liệu tăng nhờ cộng đồng).
+  const footer = loading || error ? undefined : (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Gợi ý quán ngon cho app"
+      onPress={() => router.push('/suggest')}
+      style={({ pressed }) => [styles.suggestCard, { borderColor: t.border, opacity: pressed ? 0.8 : 1 }]}>
+      <Icon name="lightbulb" size={20} themeColor="tint" />
+      <View style={styles.flex}>
+        <ThemedText type="smallBold">Biết quán ngon mà chưa có ở đây?</ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary">
+          Gợi ý cho tụi mình, admin sẽ ghé thử rồi đăng lên
+        </ThemedText>
+      </View>
+      <Icon name="chevron-right" size={18} themeColor="textMuted" />
+    </Pressable>
   );
 
   return (
@@ -583,11 +688,12 @@ export default function HomeScreen() {
             <PlaceCard place={item} distanceKm={item.distanceKm} reason={understood ? matchReason(item, f) : undefined} />
           )}
           ListHeaderComponent={header}
+          ListFooterComponent={footer}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.two + 4 }} />}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={t.tint} />}
           ListEmptyComponent={
-            loading ? undefined : (
+            loading || (!isFiltering && featuredPlaces.length) ? undefined : (
               <View style={[styles.emptyBox, { backgroundColor: t.card, borderColor: t.cardBorder }, Shadows.soft]}>
                 <Icon name="utensils-crossed" size={40} themeColor="textMuted" />
                 <ThemedText type="subtitle" style={{ textAlign: 'center' }}>
@@ -600,7 +706,15 @@ export default function HomeScreen() {
                     ? 'Hãy thử bỏ bớt bộ lọc hoặc tìm kiếm từ khóa khác xem sao nhé!'
                     : 'Chưa có quán nào trong hệ thống.'}
                 </ThemedText>
-                {isFiltering ? (
+                {error ? (
+                  <Button
+                    title="Thử lại"
+                    variant="outline"
+                    icon={<Icon name="rotate-ccw" size={18} themeColor="text" />}
+                    onPress={load}
+                    style={{ marginTop: Spacing.two }}
+                  />
+                ) : isFiltering ? (
                   <Button
                     title="Đặt lại tất cả bộ lọc"
                     variant="tintSubtle"
@@ -997,6 +1111,41 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  voteBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Radii.lg,
+    padding: Spacing.three,
+    marginTop: Spacing.two,
+    minHeight: 64,
+  },
+  voteBannerIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  hotTitle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  hotCard: {
+    width: 220,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two + 2,
+    borderWidth: 1,
+    borderRadius: Radii.lg,
+    paddingVertical: Spacing.two + 2,
+    paddingHorizontal: Spacing.three,
+    minHeight: 60,
+  },
+  hotRank: { fontSize: 26, lineHeight: 30, fontWeight: '800', minWidth: 22, textAlign: 'center' },
+  suggestCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: Radii.lg,
+    padding: Spacing.three,
+    marginTop: Spacing.three,
+    minHeight: 56,
+  },
   /* Featured Carousel */
   featuredSection: {
     marginTop: Spacing.two,

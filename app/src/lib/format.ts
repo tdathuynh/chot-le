@@ -65,3 +65,17 @@ export function parseTime(s: string): string | null {
   if (h > 23 || mi > 59) return null;
   return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
 }
+
+/** Ưu đãi còn hiệu lực? (có nội dung và chưa quá hạn) */
+export function isDealActive(p: Pick<Place, 'deal_title' | 'deal_until'>, now = new Date()): boolean {
+  if (!p.deal_title?.trim()) return false;
+  if (!p.deal_until) return true;
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return p.deal_until >= today;
+}
+
+/** "2026-12-31" → "31/12/2026" */
+export function formatDate(d: string | null | undefined): string {
+  const m = d?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}

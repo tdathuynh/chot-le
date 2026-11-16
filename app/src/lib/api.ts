@@ -14,6 +14,8 @@ import {
   type PlaceStats,
   type PlaceSuggestion,
   type PlaceWithRelations,
+  type VisitPlatform,
+  type VisitStat,
   type Poll,
 } from './types';
 
@@ -412,6 +414,53 @@ export async function fetchPlaceStats(days = 7): Promise<PlaceStats[]> {
   }));
 }
 
+/** Ghi 1 lượt vào app (server tự bỏ qua nếu máy này vừa vào trong 30 phút). Không bao giờ ném lỗi. */
+export function trackVisit(source: string, platform: VisitPlatform, landing: string) {
+  const device = getDeviceId();
+  if (isDemo) {
+    const last = demoVisits.findLast((v) => v.device === device);
+    if (!last || Date.now() - last.at > 30 * 60e3) demoVisits.push({ device, source, at: Date.now() });
+    return;
+  }
+  supabase.rpc('track_visit', { p_device: device, p_source: source, p_platform: platform, p_landing: landing }).then(
+    () => {},
+    () => {}
+  );
+}
+
+/** Admin: lượt vào app theo nguồn trong `days` ngày (kèm 1 dòng tổng source = null). */
+export async function fetchVisitStats(days = 7): Promise<VisitStat[]> {
+  if (isDemo) {
+    const since = Date.now() - days * 864e5;
+    const first = new Map<string, number>();
+    for (const v of demoVisits) if (!first.has(v.device)) first.set(v.device, v.at);
+    const groups = new Map<string | null, { visits: number; devs: Set<string> }>();
+    for (const v of demoVisits) {
+      if (v.at < since) continue;
+      for (const key of [v.source, null]) {
+        const g = groups.get(key) ?? { visits: 0, devs: new Set<string>() };
+        g.visits++;
+        g.devs.add(v.device);
+        groups.set(key, g);
+      }
+    }
+    return [...groups.entries()].map(([source, g]) => ({
+      source,
+      visits: g.visits,
+      visitors: g.devs.size,
+      new_visitors: [...g.devs].filter((d) => (first.get(d) ?? 0) >= since).length,
+    }));
+  }
+  const { data, error } = await supabase.rpc('visit_stats', { p_days: days });
+  if (error) throw error;
+  return ((data ?? []) as VisitStat[]).map((s) => ({
+    source: s.source,
+    visits: Number(s.visits),
+    visitors: Number(s.visitors),
+    new_visitors: Number(s.new_visitors),
+  }));
+}
+
 /** Quán "Đang hot" 7 ngày (id theo thứ tự điểm giảm dần). */
 export async function fetchTrending(limit = 10): Promise<string[]> {
   if (isDemo) {
@@ -439,6 +488,7 @@ type DemoPoll = Omit<Poll, 'is_creator' | 'options'> & {
 const demoPolls = new Map<string, DemoPoll>();
 const demoSuggestions: PlaceSuggestion[] = [];
 const demoEvents: { place_id: string; kind: PlaceEventKind; at: number }[] = [];
+const demoVisits: { device: string; source: string; at: number }[] = [];
 
 function demoFind(id: string): PlaceWithRelations {
   const p = demoPlaces.find((x) => x.id === id);

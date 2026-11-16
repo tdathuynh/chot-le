@@ -32,6 +32,8 @@ app/                         Expo app (SDK 58, Expo Router, TypeScript strict)
   src/lib/format.ts          Định dạng giá (65k), giờ, isOpenNow, normalize (bỏ dấu để tìm kiếm)
   src/lib/favorites.ts       Yêu thích lưu local (useSyncExternalStore)
   src/lib/device.ts          Mã máy ngẫu nhiên (getDeviceId) + tên hiển thị khi bình chọn; KHÔNG phải tài khoản
+  src/lib/visit.ts           Đếm lượt vào app theo nguồn (?utm_source=tiktok / referrer) → RPC track_visit; admin xem ở "Thống kê"
+  public/index.html, og.png  Khung HTML bản web + thẻ Open Graph (ảnh/tiêu đề khi dán link vào Zalo, Facebook, TikTok)
   src/lib/share-link.ts      Link chia sẻ bình chọn (web origin / EXPO_PUBLIC_WEB_URL / deep link chotle://)
   src/lib/filters.ts         Bộ lọc dùng chung (Filters, applyFilters) + hiểu câu tiếng Việt trên máy (parseQueryLocal)
   src/lib/location.ts        Vị trí người dùng (expo-location), khoảng cách, toạ độ từ link Google Maps, directionsUrl

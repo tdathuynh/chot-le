@@ -80,6 +80,10 @@ export type PlaceSuggestion = { id: number; name: string; maps_url: string | nul
 export type PlaceStats = { place_id: string; views: number; directions: number; calls: number; shares: number };
 export type PlaceEventKind = 'view' | 'directions' | 'call' | 'share';
 
+/** Lượt vào app theo nguồn (RPC visit_stats, chỉ admin). source = null là dòng tổng. */
+export type VisitStat = { source: string | null; visits: number; visitors: number; new_visitors: number };
+export type VisitPlatform = 'web' | 'ios' | 'android';
+
 /** Mục đích đi ăn — lưu khóa (key) trong cột places.occasions. */
 export const OCCASIONS = [
   { key: 'ban-be', label: 'Đi nhóm bạn', icon: 'users' },

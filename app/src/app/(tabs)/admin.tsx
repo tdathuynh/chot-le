@@ -4,7 +4,7 @@ import { ActivityIndicator, FlatList, Linking, Platform, Pressable, StyleSheet, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlaceCard } from '@/components/place-card';
-import { Icon } from '@/components/icon';
+import { Icon, type IconName } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Badge, Button, Center, Chip, Field, Section } from '@/components/ui';
@@ -15,13 +15,14 @@ import {
   fetchPlaceStats,
   fetchPlaces,
   fetchSuggestions,
+  fetchVisitStats,
   isDemo,
   setPublished,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { confirmAsync, notify } from '@/lib/confirm';
 import { normalize } from '@/lib/format';
-import type { PlaceStats, PlaceSuggestion, PlaceWithRelations } from '@/lib/types';
+import type { PlaceStats, PlaceSuggestion, PlaceWithRelations, VisitStat } from '@/lib/types';
 
 type StatDays = 7 | 30;
 const SUGGESTIONS_PREVIEW = 3;
@@ -60,7 +61,23 @@ function relativeTime(iso: string) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
-function StatTile({ icon, label, value }: { icon: 'eye' | 'navigation' | 'phone' | 'share'; label: string; value: number }) {
+const SOURCE_LABELS: Record<string, string> = {
+  tiktok: 'TikTok',
+  zalo: 'Zalo',
+  facebook: 'Facebook / Messenger',
+  instagram: 'Instagram',
+  youtube: 'YouTube',
+  threads: 'Threads',
+  x: 'X (Twitter)',
+  google: 'Google',
+  'tim-kiem': 'Công cụ tìm kiếm khác',
+  'truc-tiep': 'Vào thẳng / không rõ',
+  app: 'App trên điện thoại',
+  khac: 'Khác',
+};
+const sourceLabel = (s: string) => SOURCE_LABELS[s] ?? s;
+
+function StatTile({ icon, label, value }: { icon: IconName; label: string; value: number }) {
   const t = useTheme();
   return (
     <View style={[styles.statTile, { backgroundColor: t.backgroundElement }]}>
@@ -244,6 +261,7 @@ export default function AdminScreen() {
 
   const [statDays, setStatDays] = useState<StatDays>(7);
   const [stats, setStats] = useState<PlaceStats[]>([]);
+  const [visits, setVisits] = useState<VisitStat[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
   const statsReq = useRef(0);
@@ -258,10 +276,11 @@ export default function AdminScreen() {
   const loadStats = useCallback((days: StatDays) => {
     const req = ++statsReq.current;
     setStatsLoading(true);
-    fetchPlaceStats(days).then(
-      (data) => {
+    Promise.all([fetchPlaceStats(days), fetchVisitStats(days)]).then(
+      ([data, v]) => {
         if (req !== statsReq.current) return;
         setStats(data);
+        setVisits(v);
         setStatsError(null);
         setStatsLoading(false);
       },
@@ -293,6 +312,12 @@ export default function AdminScreen() {
     setStatDays(d);
     loadStats(d);
   };
+
+  const visitTotal = visits.find((v) => v.source === null) ?? { visits: 0, visitors: 0, new_visitors: 0 };
+  const visitSources = useMemo(
+    () => visits.filter((v): v is VisitStat & { source: string } => v.source !== null).sort((a, b) => b.visits - a.visits),
+    [visits]
+  );
 
   const statsByPlace = useMemo(() => new Map(stats.map((s) => [s.place_id, s])), [stats]);
   const statSum = useMemo(
@@ -533,7 +558,7 @@ export default function AdminScreen() {
             </Section>
 
             {/* Thống kê lượt quan tâm */}
-            <Section title="Lượt quan tâm">
+            <Section title="Thống kê">
               <View style={[styles.statsCard, { backgroundColor: t.card, borderColor: t.cardBorder }, Shadows.soft]}>
                 <View style={styles.statsHeader}>
                   <View style={styles.statsTitle}>
@@ -556,15 +581,50 @@ export default function AdminScreen() {
                     <Button title="Thử lại" variant="secondary" size="sm" onPress={() => loadStats(statDays)} />
                   </View>
                 ) : (
-                  <View style={[styles.statTiles, statsLoading && stats.length === 0 ? styles.dimmed : null]}>
-                    <StatTile icon="eye" label="Lượt xem" value={statSum.views} />
-                    <StatTile icon="navigation" label="Chỉ đường" value={statSum.directions} />
-                    <StatTile icon="phone" label="Gọi" value={statSum.calls} />
-                    <StatTile icon="share" label="Chia sẻ" value={statSum.shares} />
+                  <View style={[styles.statsBody, statsLoading && stats.length === 0 ? styles.dimmed : null]}>
+                    <ThemedText type="smallBold" themeColor="textSecondary">
+                      LƯỢT VÀO APP
+                    </ThemedText>
+                    <View style={styles.statTiles}>
+                      <StatTile icon="trending-up" label="Lượt vào" value={visitTotal.visits} />
+                      <StatTile icon="users" label="Người dùng" value={visitTotal.visitors} />
+                      <StatTile icon="user" label="Người mới" value={visitTotal.new_visitors} />
+                    </View>
+                    {visitSources.length ? (
+                      <View style={styles.sourceList}>
+                        {visitSources.map((s) => (
+                          <View key={s.source} style={[styles.sourceRow, { borderBottomColor: t.border }]}>
+                            <ThemedText type="small" numberOfLines={1} style={styles.flexShrinkText}>
+                              {sourceLabel(s.source)}
+                            </ThemedText>
+                            <ThemedText type="small" themeColor="textSecondary">
+                              {s.visits} lượt · {s.visitors} người
+                            </ThemedText>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Chưa có lượt vào nào trong {statDays} ngày.
+                      </ThemedText>
+                    )}
+                    <ThemedText type="caption" themeColor="textSecondary">
+                      Link đặt ở bio/bài đăng nên thêm ?utm_source=tiktok (hoặc zalo, facebook…) để đếm đúng nguồn.
+                    </ThemedText>
+
+                    <ThemedText type="smallBold" themeColor="textSecondary" style={styles.statsSubhead}>
+                      QUAN TÂM TỚI QUÁN
+                    </ThemedText>
+                    <View style={styles.statTiles}>
+                      <StatTile icon="eye" label="Lượt xem" value={statSum.views} />
+                      <StatTile icon="navigation" label="Chỉ đường" value={statSum.directions} />
+                      <StatTile icon="phone" label="Gọi" value={statSum.calls} />
+                      <StatTile icon="share" label="Chia sẻ" value={statSum.shares} />
+                    </View>
                   </View>
                 )}
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Số liệu này dùng để báo cáo cho chủ quán (gói quán đối tác).
+                  Số liệu quán dùng để báo cáo cho chủ quán (gói quán đối tác).
                 </ThemedText>
               </View>
             </Section>
@@ -700,6 +760,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
+  },
+  statsBody: { gap: Spacing.two },
+  statsSubhead: { marginTop: Spacing.two },
+  sourceList: { gap: 0 },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   statTile: {
     flexGrow: 1,

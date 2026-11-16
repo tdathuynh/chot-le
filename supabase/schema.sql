@@ -436,6 +436,79 @@ grant execute on function public.trending_places(int) to anon, authenticated;
 revoke execute on function public.place_stats(int) from public, anon;
 grant execute on function public.place_stats(int) to authenticated;
 
+-- ---------- Lượt vào app (đo hiệu quả TikTok, Zalo…) ----------
+-- Mỗi lần mở app ghi 1 dòng: mã máy (không phải tài khoản), nguồn (utm_source / trang giới thiệu), nền tảng.
+-- Khách chỉ ghi qua RPC track_visit; chỉ admin đọc (visit_stats).
+create table if not exists public.app_visits (
+  id bigint generated always as identity primary key,
+  device uuid not null,
+  source text not null check (char_length(source) between 1 and 40),
+  platform text not null check (platform in ('web', 'ios', 'android')),
+  landing text check (char_length(landing) <= 120),
+  created_at timestamptz not null default now()
+);
+create index if not exists app_visits_time_idx on public.app_visits (created_at);
+create index if not exists app_visits_device_time_idx on public.app_visits (device, created_at);
+
+alter table public.app_visits enable row level security;
+drop policy if exists "app_visits admin" on public.app_visits;
+create policy "app_visits admin" on public.app_visits
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- Mở lại trong 30 phút trên cùng máy không tính lượt mới (chống đếm trùng, chống spam).
+create or replace function public.track_visit(p_device uuid, p_source text, p_platform text, p_landing text)
+returns void language plpgsql security definer set search_path = '' as $$
+declare
+  v_source text := lower(coalesce(p_source, ''));
+begin
+  if p_device is null or p_platform not in ('web', 'ios', 'android') then
+    return;
+  end if;
+  if v_source !~ '^[a-z0-9._-]{1,40}$' then
+    v_source := 'khac';
+  end if;
+  if exists (
+    select 1 from public.app_visits v
+    where v.device = p_device and v.created_at > now() - interval '30 minutes'
+  ) then
+    return;
+  end if;
+  insert into public.app_visits (device, source, platform, landing)
+  values (p_device, v_source, p_platform, left(nullif(p_landing, ''), 120));
+end;
+$$;
+
+-- Thống kê lượt vào N ngày theo nguồn: chỉ admin. Dòng source = null là tổng.
+-- visitors = số máy khác nhau; new_visitors = máy lần đầu vào app trong khoảng này.
+create or replace function public.visit_stats(p_days int default 7)
+returns table (source text, visits bigint, visitors bigint, new_visitors bigint)
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_since timestamptz := now() - make_interval(days => greatest(1, least(p_days, 90)));
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ admin';
+  end if;
+  return query
+  with firsts as (
+    select v.device, min(v.created_at) as first_at from public.app_visits v group by v.device
+  )
+  select v.source,
+    count(*),
+    count(distinct v.device),
+    count(distinct v.device) filter (where f.first_at > v_since)
+  from public.app_visits v
+  join firsts f on f.device = v.device
+  where v.created_at > v_since
+  group by grouping sets ((v.source), ());
+end;
+$$;
+
+revoke execute on function public.track_visit(uuid, text, text, text) from public;
+grant execute on function public.track_visit(uuid, text, text, text) to anon, authenticated;
+revoke execute on function public.visit_stats(int) from public, anon;
+grant execute on function public.visit_stats(int) to authenticated;
+
 -- ---------- Danh mục mẫu ----------
 insert into public.categories (name, icon, sort_order) values
   ('Bún / Phở', 'soup', 1),

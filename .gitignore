@@ -19,5 +19,8 @@ screenshots/_scripts/
 screenshots/edge-profile/
 *.log
 
+# Bài ảnh TikTok đã xuất (tạo lại được bằng tools/tiktok/make.mjs)
+tiktok-posts/
+
 # Cài đặt cá nhân của Claude Code
 .claude/settings.local.json

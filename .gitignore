@@ -21,6 +21,8 @@ screenshots/edge-profile/
 
 # Bài ảnh TikTok đã xuất (tạo lại được bằng tools/tiktok/make.mjs)
 tiktok-posts/
+.video-tmp/
+branding/.tmp/
 
 # Cài đặt cá nhân của Claude Code
 .claude/settings.local.json

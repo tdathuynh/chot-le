@@ -6,12 +6,11 @@ import {
   type TabTriggerSlotProps,
   type TabListProps,
 } from 'expo-router/ui';
+import { Image } from 'expo-image';
 import { Pressable, View, StyleSheet, useWindowDimensions, type PressableProps } from 'react-native';
 
 import { MaxContentWidth, Radii, Shadows, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-
-import { Icon } from '@/components/icon';
 
 import { ThemedText } from './themed-text';
 
@@ -85,7 +84,7 @@ export function CustomTabList(props: TabListProps) {
           Shadows.medium,
         ]}>
         <View style={[styles.brandRow, compact && { paddingLeft: 6 }]}>
-          <Icon name="utensils-crossed" size={20} color={t.tint} />
+          <Image source={require('@/assets/images/icon.png')} style={styles.brandLogo} accessibilityLabel="Logo Chốt Lẹ" />
           {!compact && <ThemedText type="defaultBold" style={{ color: t.tint }}>
             Chốt Lẹ
           </ThemedText>}
@@ -98,6 +97,7 @@ export function CustomTabList(props: TabListProps) {
 }
 
 const styles = StyleSheet.create({
+  brandLogo: { width: 28, height: 28, borderRadius: 7 },
   tabListContainer: {
     position: 'absolute',
     top: 0,

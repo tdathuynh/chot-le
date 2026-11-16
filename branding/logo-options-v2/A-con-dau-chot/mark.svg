@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs><linearGradient id="A0_g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024"><stop offset="0" stop-color="#F57A2C"/><stop offset="1" stop-color="#C94705"/></linearGradient></defs><rect width="1024" height="1024" fill="url(#A0_g)"/><defs><mask id="A0_m" maskUnits="userSpaceOnUse" x="-600" y="-600" width="1200" height="1200"><rect x="-600" y="-600" width="1200" height="1200" fill="#fff"/><circle cx="-250" cy="-276" r="21" fill="#000"/><circle cx="-205" cy="-280" r="11" fill="#000"/><circle cx="70" cy="-277" r="12" fill="#000"/><circle cx="300" cy="277" r="25" fill="#000"/><circle cx="345" cy="280" r="10" fill="#000"/><circle cx="-120" cy="278" r="12" fill="#000"/><circle cx="446" cy="-110" r="19" fill="#000"/><circle cx="-446" cy="92" r="17" fill="#000"/><circle cx="-446" cy="130" r="8" fill="#000"/><path d="M120 -212h84v-24h-84z M-392 -20v62h20v-62z" fill="#000"/></mask></defs>
+<g transform="translate(512 520) rotate(-9) scale(0.84)"><g mask="url(#A0_m)" fill="none" stroke="#fff">
+<rect x="-420" y="-250" width="840" height="500" rx="74" stroke-width="46"/>
+<rect x="-376" y="-206" width="752" height="412" rx="36" stroke-width="12"/>
+<path d="M-192 -20H-263A46 46 0 0 0 -309 26V90A46 46 0 0 0 -263 136H-192M-135 -47V163M-39 -47V163M-135 62H-39M85 -20H89A46 46 0 0 1 135 26V90A46 46 0 0 1 89 136H85A46 46 0 0 1 39 90V26A46 46 0 0 1 85 -20ZM186 -20H336M261 -20V163" stroke-width="54" stroke-linejoin="round"/>
+<path d="M38 -69L84 -113L130 -69" stroke-width="30" stroke-linejoin="miter"/>
+<path d="M136 -121L172 -163" stroke-width="30"/>
+</g></g></svg>

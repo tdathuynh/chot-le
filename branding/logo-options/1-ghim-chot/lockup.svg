@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 280" width="1000" height="280">
+<style>@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@800;900&amp;display=block');
+.w{font-family:'Be Vietnam Pro',sans-serif;font-weight:900;font-size:170px;letter-spacing:-4px}</style>
+<defs><linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024"><stop offset="0" stop-color="#F57A2C"/><stop offset="1" stop-color="#C94705"/></linearGradient></defs>
+<g transform="translate(20 30) scale(0.215)"><rect width="1024" height="1024" rx="230" fill="url(#bg)"/><path d="M298.8 585.7A270 270 0 1 1 725.2 585.7L538 838Q512 872 486 838Z" fill="#fff"/>
+      <path d="M378 432L470 522L760 232" fill="none" stroke="url(#bg)" stroke-width="80" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text class="w" x="290" y="204" fill="#1F1A17">Chốt <tspan fill="#C94705">Lẹ</tspan></text>
+</svg>

@@ -5,6 +5,19 @@
 // Vùng an toàn TikTok: chữ quan trọng nằm trong x 72..940, y 160..1540
 // (trên 160px, phải 140px, dưới 380px bị giao diện TikTok che). Ảnh được phép tràn ra ngoài.
 
+import fs from 'node:fs';
+
+// Logo "Lẹ" (dấu nặng là cái ghim), vector trắng; tô lại màu khi dùng.
+const GLYPH_SVG = fs.readFileSync(new URL('../../branding/logo/glyph-white.svg', import.meta.url), 'utf8');
+function logoGlyph(color, height) {
+  const width = Math.round((height * 634) / 782);
+  // Chỉ tô màu phần chữ; giữ nguyên mặt nạ (nền trắng của mask quyết định độ đục).
+  const [head, body] = GLYPH_SVG.split('<g mask');
+  return (head + '<g mask' + body.replaceAll('#fff', color))
+    .replace(/width="\d+" height="\d+"/, `width="${width}" height="${height}"`)
+    .replace(/<svg /, '<svg style="display:block" ');
+}
+
 const W = 1080;
 const H = 1920;
 const SAFE = { top: 160, right: 140, bottom: 380, left: 72 };
@@ -89,7 +102,7 @@ img{display:block}
 `;
 
 function brandMark(bg, fg) {
-  return `<span class="brand-mark" style="background:${bg}">${icon('utensils', 26, fg, 2.4)}</span>`;
+  return `<span class="brand-mark" style="background:${bg}">${logoGlyph(fg, 30)}</span>`;
 }
 
 function debugOverlay() {
@@ -362,7 +375,7 @@ body{background:${DOT_PATTERN},${BRAND_GRADIENT}}
   const body = `
 <div class="abs fade"></div>
 <div class="abs wrap">
-  <div class="brand brand-big"><span class="brand-mark" style="width:112px;height:112px;border-radius:32px;background:#fff">${icon('utensils', 64, C.orange, 2.4)}</span>Chốt Lẹ</div>
+  <div class="brand brand-big"><span class="brand-mark" style="width:112px;height:112px;border-radius:32px;background:#fff">${logoGlyph(C.orange, 72)}</span>Chốt Lẹ</div>
   ${post.outro?.line1 ? `<div class="line1 clamp">${esc(post.outro.line1)}</div>` : ''}
   ${shown.length ? `<div class="card">
     <div class="card-h">${esc(post.title)}</div>

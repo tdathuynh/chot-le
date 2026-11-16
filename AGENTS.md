@@ -11,6 +11,8 @@ Giao diện và nội dung hiển thị viết bằng **tiếng Việt**.
 
 ## Cấu trúc thư mục
 ```
+branding/logo/                 Logo chính thức (hướng B: chữ "Lẹ", dấu nặng là cái ghim); xuất lại icon app/splash/favicon: node branding/scripts/apply-logo.mjs
+tools/tiktok/                  Tạo bài ảnh TikTok 1080×1920 từ quán đang hiển thị (xem README trong đó)
 supabase/functions/parse-query  Edge Function: hiểu câu tìm kiếm bằng Claude (khóa ở secret Supabase)
 supabase/schema.sql          Toàn bộ schema + RLS + storage policy + danh mục mẫu (chạy lại được, idempotent)
 HUONG_DAN_SUPABASE.md        Hướng dẫn tạo project Supabase và tài khoản admin

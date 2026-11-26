@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "oip": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "mcp-remote", "http://127.0.0.1:5189/mcp"]
+    },
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=xpfbmlxmlscdtslyndum&features=docs%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cfeedback"
